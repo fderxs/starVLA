@@ -15,7 +15,7 @@ Framework_name=QwenFast
 base_vlm=StarVLA/Qwen3-VL-4B-Instruct-Action
 action_input_dim=2048
 ## Data
-oxe_data_root=playground/Datasets/OXE_LEROBOT
+oxe_data_root=playground/Datasets
 data_mix=bridge_rt_1
 # To save
 run_root_dir=./playground/Checkpoints

@@ -32,11 +32,11 @@ hf download "StarVLA/LLaVA-OneVision-COCO" --repo-type dataset --local-dir "$DES
 unzip -- "$DEST/LLaVA-OneVision-COCO/sharegpt4v_coco.zip" -d "$DEST/LLaVA-OneVision-COCO/"
 
 mkdir -p "$CUR/playground/Datasets"
-ln -s "$DEST/libero" "$CUR/playground/Datasets/LEROBOT_LIBERO_DATA"
+ln -s "$DEST/libero" "$CUR/playground/Datasets"
 ln -s "$DEST/LLaVA-OneVision-COCO" "$CUR/playground/Datasets/LLaVA-OneVision-COCO"
 
 ## move modality
-cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/LEROBOT_LIBERO_DATA/libero_10_no_noops_1.0.0_lerobot/meta"
-cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/LEROBOT_LIBERO_DATA/libero_goal_no_noops_1.0.0_lerobot/meta"
-cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/LEROBOT_LIBERO_DATA/libero_object_no_noops_1.0.0_lerobot/meta"
-cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/LEROBOT_LIBERO_DATA/libero_spatial_no_noops_1.0.0_lerobot/meta"
+cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/libero_10_no_noops_1.0.0_lerobot/meta"
+cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/libero_goal_no_noops_1.0.0_lerobot/meta"
+cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/libero_object_no_noops_1.0.0_lerobot/meta"
+cp "$CUR/examples/LIBERO/train_files/modality.json" "$CUR/playground/Datasets/libero_spatial_no_noops_1.0.0_lerobot/meta"

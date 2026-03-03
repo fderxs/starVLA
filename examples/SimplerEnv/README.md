@@ -106,7 +106,7 @@ Steps:
     datasets:
       vla_data:
         dataset_py: lerobot_datasets
-        data_root_dir: playground/Datasets/OXE_LEROBOT_DATASET  # path to your dataset
+        data_root_dir: playground/Datasets  # path to your dataset
         data_mix: bridge_rt_1
     ```
 
