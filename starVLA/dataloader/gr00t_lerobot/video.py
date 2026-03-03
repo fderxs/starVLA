@@ -16,6 +16,7 @@
 
 import av
 import cv2
+import gc
 import numpy as np
 
 import torch  # noqa: F401 # isort: skip
@@ -247,7 +248,7 @@ def get_frames_by_timestamps(
         try:
             reader = torchvision.io.VideoReader(video_path, "video")
             
-            for target_ts in timestamps:
+            for idx, target_ts in enumerate(timestamps):
                 # Reset reader state
                 reader.seek(target_ts, keyframes_only=True)
                 
@@ -257,10 +258,7 @@ def get_frames_by_timestamps(
                 for frame in reader:
                     current_ts = frame["pts"]
                     current_diff = abs(current_ts - target_ts)
-                    
-                    if closest_frame is None:
-                        closest_frame = frame
-                    
+
                     if current_diff < closest_ts_diff:
                         # Release the previous frame
                         if closest_frame is not None:
@@ -269,7 +267,13 @@ def get_frames_by_timestamps(
                         closest_frame = frame
                     else:
                         # The time difference starts to increase, stop searching
+                        # Explicitly delete the current frame that we won't use
+                        del frame
                         break
+
+                    # Delete frames that won't be used
+                    if closest_frame is not frame:
+                        del frame
                 
                 if closest_frame is not None:
                     frame_data = closest_frame["data"]
@@ -280,18 +284,34 @@ def get_frames_by_timestamps(
                     
                     # Immediately release frame reference
                     del closest_frame
-                    
+                    del frame_data
+
+                    # Trigger garbage collection periodically (every 10 frames)
+                    if idx % 10 == 0:
+                        gc.collect()
+
         finally:
             # Thoroughly clean resources
             if reader is not None:
                 if hasattr(reader, '_c'):
                     reader._c = None
                 if hasattr(reader, 'container'):
-                    reader.container.close()
+                    if hasattr(reader.container, 'close'):
+                        reader.container.close()
                     reader.container = None
-        
+                del reader
+                reader = None
+            # Final garbage collection
+            gc.collect()
+
         frames = np.array(loaded_frames)
-        return frames.transpose(0, 2, 3, 1)
+        # Use in-place transpose if possible to avoid extra copy
+        result = frames.transpose(0, 2, 3, 1)
+        # Clear intermediate arrays
+        del loaded_frames
+        del frames
+        gc.collect()
+        return result
     else:
         raise NotImplementedError
 
