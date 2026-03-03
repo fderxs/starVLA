@@ -8,16 +8,22 @@ export NCCL_BLOCKING_WAIT=1
 export NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_TIMEOUT=10000  # timeout set to 1 hour (unit: seconds)
 export NCCL_SOCKET_TIMEOUT_MS=360000
+
+export HF_HUB_ETAG_TIMEOUT=86400
+export HF_HUB_DOWNLOAD_TIMEOUT=86400
+export HF_ENDPOINT=https://artifactory-cloud.chehejia.com/artifactory/api/huggingfaceml/huggingface-remote
+export WANDB_MODE=offline
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 ###########################################################################################
 # === Please modify the following paths according to your environment ===
-Framework_name=QwenOFT
+Framework_name=QwenGR00T
 freeze_module_list=''
-base_vlm=playground/Pretrained_models/Qwen3-VL-4B-Instruct
+base_vlm=StarVLA/Qwen3-VL-4B-Instruct-Action
 config_yaml=./examples/LIBERO/train_files/starvla_cotrain_libero.yaml
-libero_data_root=playground/Datasets/LEROBOT_LIBERO_DATA
+libero_data_root=playground/Datasets
 data_mix=libero_all
 run_root_dir=./results/Checkpoints
-run_id=1229_libero4in1_qwen3oft
+run_id=libero4in1_qwen3gr00t
 # === End of environment variable configuration ===
 ###########################################################################################
 
@@ -40,17 +46,18 @@ accelerate launch \
   --datasets.vla_data.data_root_dir ${libero_data_root}\
   --datasets.vla_data.data_mix ${data_mix} \
   --datasets.vla_data.per_device_batch_size 16 \
-  --trainer.vla_data.video_backend torchvision_av \
+  --datasets.vla_data.video_backend torchvision_av \
   --trainer.freeze_modules ${freeze_module_list} \
   --trainer.max_train_steps 80000 \
-  --trainer.save_interval 10000 \
+  --trainer.save_interval 2000 \
   --trainer.logging_frequency 100 \
   --trainer.eval_interval 100 \
   --run_root_dir ${run_root_dir} \
   --run_id ${run_id} \
   --wandb_project starVLA_Libero \
   --wandb_entity jinhuiye \
-  # --is_debug True
+  --is_debug False \
+  2>&1 | tee ${output_dir}/train.log
 
 
 
