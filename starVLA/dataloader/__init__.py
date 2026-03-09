@@ -40,13 +40,16 @@ def build_dataloader(cfg, dataset_py="lerobot_datasets_oxe"): # TODO now here on
         vla_dataset_cfg = cfg.datasets.vla_data
 
         vla_dataset = get_vla_dataset(data_cfg=vla_dataset_cfg)
-        
+
+        num_workers = cfg.datasets.vla_data.get("num_workers", 0)
+        prefetch_factor = cfg.datasets.vla_data.get("prefetch_factor", 2) if num_workers > 0 else None
         vla_train_dataloader = DataLoader(
             vla_dataset,
             batch_size=cfg.datasets.vla_data.per_device_batch_size,
             collate_fn=collate_fn,
-            num_workers=16,
-            persistent_workers=True,  # Keep worker processes alive to avoid recreation overhead
+            num_workers=num_workers,
+            prefetch_factor=prefetch_factor,  # Limit number of batches prefetched per worker
+            persistent_workers=(num_workers > 0),  # Only use persistent workers if num_workers > 0
             pin_memory=True,  # Speed up data transfer to GPU
             # shuffle=True
         )        
