@@ -1,20 +1,18 @@
 #!/bin/bash
-
-echo `which python`
-
-export sim_python=/mnt/petrelfs/share/yejinhui/Envs/miniconda3/envs/dinoact/bin/python
-export SimplerEnv_PATH=/mnt/petrelfs/share/yejinhui/Projects/SimplerEnv
+export sim_python=/mnt/volumes/base-3da-ali-sh-mix/xswang/miniconda3/envs/simpler_env/bin/python
+export SimplerEnv_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/SimplerEnv
 export PYTHONPATH=$(pwd):${PYTHONPATH}
+export CUDA_VISIBLE_DEVICES=1
 #### set environment variables #####
 
 #### get parameters #####
 if [ -n "$1" ]; then
   MODEL_PATH="$1" # model path indict the output tree
 else
-  MODEL_PATH=./results/Checkpoints/1208_bridge_rt_1_Qwen3PI/final_model/pytorch_model.pt
+  MODEL_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/pretrained/StarVLA/StarVLA__Qwen3VL-GR00T-Bridge-RT-1/25-10-16-1401/checkpoints/steps_20000_pytorch_model.pt
 fi
 
-port=${2:-6678} # connect to your policy server port
+port=${2:-12900} # connect to your policy server port
 
 
 #### build output directory #####
@@ -32,13 +30,6 @@ mkdir -p "${output_eval_dir}"
 
 TSET_NUM=1
 # export DEBUG=1
-
-IFS=',' read -r -a CUDA_DEVICES <<< "$CUDA_VISIBLE_DEVICES"
-NUM_GPUS=${#CUDA_DEVICES[@]} 
-
-echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
-echo "CUDA_DEVICES: ${CUDA_DEVICES[@]}"
-echo "NUM_GPUS: $NUM_GPUS"
 
 scene_name=bridge_table_1_v1
 robot=widowx
@@ -100,7 +91,8 @@ for i in "${!ENV_NAMES_V2[@]}"; do
     task_log="${output_eval_dir}/${ckpt_name}_${env}_run${run_idx}.log"
     echo "▶️ Launching V2 task [${env}] run#${run_idx}, log → ${task_log}"
 
-    ${sim_python} examples/SimplerEnv/eval_files/start_simpler_env.py\
+    torchrun --nproc_per_node=1 --master_port=25910\
+      examples/SimplerEnv/eval_files/start_simpler_env.py\
       --ckpt-path ${ckpt_path} \
       --port ${port} \
       --robot ${robot} \
@@ -123,4 +115,4 @@ for i in "${!ENV_NAMES_V2[@]}"; do
   done
 done
 
-# echo "✅ Finished"
+echo "✅ Finished"
