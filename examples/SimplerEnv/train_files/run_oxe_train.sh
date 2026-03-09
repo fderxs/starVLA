@@ -6,18 +6,23 @@ export NCCL_IB_HCA=mlx5_2,mlx5_3
 # used for check save when communication
 export NCCL_BLOCKING_WAIT=1
 export NCCL_ASYNC_ERROR_HANDLING=1
-export NCCL_TIMEOUT=1000  # timeout set to 1 hour (unit: seconds)
+export NCCL_TIMEOUT=10000  # timeout set to 1 hour (unit: seconds)
+export NCCL_SOCKET_TIMEOUT_MS=360000
 
+export HF_HUB_ETAG_TIMEOUT=86400
+export HF_HUB_DOWNLOAD_TIMEOUT=86400
+export HF_ENDPOINT=https://artifactory-cloud.chehejia.com/artifactory/api/huggingfaceml/huggingface-remote
+export WANDB_MODE=offline
 ###########################################################################################
 # === Please modify the following paths according to your environment ===
-Framework_name=QwenFast
+Framework_name=QwenGR00T
 freeze_module_list=''
-base_vlm=playground/Pretrained_models/Qwen3-VL-4B-Instruct-Action
+base_vlm=StarVLA/Qwen3-VL-4B-Instruct-Action
 config_yaml=./examples/SimplerEnv/train_files/starvla_cotrain_oxe.yaml
-oxe_data_root=playground/Datasets/OXE_LEROBOT
+oxe_data_root=playground/Datasets
 data_mix=bridge_rt_1
 run_root_dir=./results/Checkpoints
-run_id=1221_${data_mix}_qwen3Fast
+run_id=${data_mix}_qwen3gr00t
 # === End of environment variable configuration ===
 ###########################################################################################
 
@@ -30,7 +35,6 @@ mkdir -p ${output_dir}
 cp $0 ${output_dir}/
 
 
-
 accelerate launch \
   --config_file starVLA/config/deepseeds/deepspeed_zero2.yaml \
   --num_processes 8 \
@@ -41,16 +45,19 @@ accelerate launch \
   --datasets.vla_data.data_root_dir ${oxe_data_root}\
   --datasets.vla_data.data_mix ${data_mix} \
   --datasets.vla_data.per_device_batch_size 16 \
+  --datasets.vla_data.video_backend torchvision_av \
+  --datasets.vla_data.num_workers 12 \
   --trainer.freeze_modules ${freeze_module_list} \
   --trainer.max_train_steps 100000 \
-  --trainer.save_interval 10000 \
+  --trainer.save_interval 2000 \
   --trainer.logging_frequency 100 \
-  --trainer.eval_interval 1000 \
+  --trainer.eval_interval 100 \
   --run_root_dir ${run_root_dir} \
   --run_id ${run_id} \
   --wandb_project starVLA_simplerEnv \
   --wandb_entity jinhuiye \
-  # --is_debug True
+  --is_debug False \
+  2>&1 | tee ${output_dir}/train.log
 
 
 
