@@ -5,8 +5,8 @@ export HF_HUB_DOWNLOAD_TIMEOUT=86400
 export HF_ENDPOINT=https://artifactory-cloud.chehejia.com/artifactory/api/huggingfaceml/huggingface-remote
 export WANDB_MODE=offline
 
-your_ckpt=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/pretrained/StarVLA/StarVLA__Qwen2_5-VL-GR00T-LIBERO-4in1/25-10-28-1624/checkpoints/steps_30000_pytorch_model.pt
-gpu_id=1
+your_ckpt=$1
+gpu_id=$2
 port=569$gpu_id
 ################# star Policy Server ######################
 

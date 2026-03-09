@@ -2,7 +2,8 @@
 ## pip install tyro websockets msgpack rich accelerate
 
 ###########################################################################################
-gpu_id=1
+your_ckpt=$1
+gpu_id=$2
 
 # === Please modify the following paths according to your environment ===
 export LIBERO_HOME=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/LIBERO
@@ -17,7 +18,6 @@ export CUDA_VISIBLE_DEVICES=2
 host="127.0.0.1"
 base_port=569$gpu_id
 unnorm_key="franka"
-your_ckpt=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/pretrained/StarVLA/StarVLA__Qwen2_5-VL-GR00T-LIBERO-4in1/25-10-28-1624/checkpoints/steps_30000_pytorch_model.pt
 
 folder_name=$(echo "$your_ckpt" | awk -F'/' '{print $(NF-2)"_"$(NF-1)"_"$NF}')
 # === End of environment variable configuration ===

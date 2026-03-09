@@ -46,6 +46,7 @@ def build_argparser():
     parser.add_argument("--port", type=int, default=10093)
     parser.add_argument("--use_bf16", action="store_true")
     parser.add_argument("--idle_timeout" , type=int, default=1800, help="Idle timeout in seconds, -1 means never close")
+    parser.add_argument("--debug", action="store_true")
     return parser
 
 
@@ -54,8 +55,8 @@ def start_debugpy_once():
     import debugpy
     if getattr(start_debugpy_once, "_started", False):
         return
-    debugpy.listen(("0.0.0.0", 10095))
-    print("🔍 Waiting for VSCode attach on 0.0.0.0:10095 ...")
+    debugpy.listen(("0.0.0.0", 10092))
+    print("🔍 Waiting for VSCode attach on 0.0.0.0:10092 ...")
     debugpy.wait_for_client()
     start_debugpy_once._started = True
 
@@ -64,7 +65,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, force=True)
     parser = build_argparser()
     args = parser.parse_args()
-    if os.getenv("DEBUG", False):
-        print("🔍 DEBUGPY is enabled")
+    if args.debug:
         start_debugpy_once()
     main(args)
