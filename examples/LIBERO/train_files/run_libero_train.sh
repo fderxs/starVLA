@@ -13,7 +13,6 @@ export HF_HUB_ETAG_TIMEOUT=86400
 export HF_HUB_DOWNLOAD_TIMEOUT=86400
 export HF_ENDPOINT=https://artifactory-cloud.chehejia.com/artifactory/api/huggingfaceml/huggingface-remote
 export WANDB_MODE=offline
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 ###########################################################################################
 # === Please modify the following paths according to your environment ===
 Framework_name=QwenGR00T
@@ -47,6 +46,7 @@ accelerate launch \
   --datasets.vla_data.data_mix ${data_mix} \
   --datasets.vla_data.per_device_batch_size 16 \
   --datasets.vla_data.video_backend torchvision_av \
+  --datasets.vla_data.num_workers 12 \
   --trainer.freeze_modules ${freeze_module_list} \
   --trainer.max_train_steps 80000 \
   --trainer.save_interval 2000 \
