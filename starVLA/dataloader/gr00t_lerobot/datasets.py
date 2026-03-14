@@ -418,6 +418,11 @@ class LeRobotSingleDataset(Dataset):
             transforms if transforms is not None else ComposedModalityTransform(transforms=[])
         )
 
+        # Check if using preprocessed frames
+        self.use_preprocessed_frames = self.data_cfg.get("use_preprocessed_frames", False) if self.data_cfg else False
+        if self.use_preprocessed_frames:
+            print(f"Using preprocessed frames from: {Path(dataset_path) / 'images'}")
+
         self._dataset_path = Path(dataset_path)
         self._dataset_name = self._dataset_path.name
         if isinstance(embodiment_tag, EmbodimentTag):
@@ -1480,6 +1485,48 @@ class LeRobotSingleDataset(Dataset):
         assert key.startswith("video."), f"Video key must start with 'video.', got {key}"
         # Get the sub-key
         key = key.replace("video.", "")
+
+        # OPTIMIZATION: Use preprocessed frames if available (10-50x faster than video decoding)
+        # Preprocessed frames are stored in: dataset_path/images/chunk-XXX/{video_key}/episode_XXXXXX.npy
+        if self.use_preprocessed_frames:
+            try:
+                chunk_index = self.get_episode_chunk(trajectory_id)
+
+                # Get the original video key (handles key mapping in modality metadata)
+                original_video_key = self.lerobot_modality_meta.video[key].original_key
+                if original_video_key is None:
+                    original_video_key = key
+
+                # Construct path aligned with LeRobot structure: images/chunk-XXX/{video_key}/episode_XXXXXX.npy
+                preprocessed_path = self.dataset_path / "images" / f"chunk-{chunk_index:03d}" / original_video_key / f"episode_{trajectory_id:06d}.npy"
+
+                # Try compressed version first
+                if not preprocessed_path.exists():
+                    preprocessed_path = preprocessed_path.with_suffix('.npz')
+
+                if preprocessed_path.exists():
+                    # Load preprocessed frames
+                    if preprocessed_path.suffix == '.npz':
+                        all_frames = np.load(preprocessed_path)['frames']
+                    else:
+                        all_frames = np.load(preprocessed_path)
+
+                    # Return requested frames by step indices
+                    return all_frames[step_indices]
+                else:
+                    # Fallback to video decoding if preprocessed file not found
+                    if not hasattr(self, '_warned_missing_preprocessed'):
+                        # print(f"⚠️  Warning: Preprocessed frames not found, falling back to video decoding")
+                        # print(f"   Expected path: {preprocessed_path}")
+                        # print(f"   Run: python examples/preprocess_lerobot_videos.py --data_root <path> --datasets {self.dataset_name}")
+                        self._warned_missing_preprocessed = True
+            except Exception as e:
+                if not hasattr(self, '_warned_preprocessed_error'):
+                    print(f"⚠️  Warning: Error loading preprocessed frames: {e}")
+                    print(f"   Falling back to video decoding")
+                    self._warned_preprocessed_error = True
+
+        # Original video decoding path (slower)
         video_path = self.get_video_path(trajectory_id, key)
         # Get the action/state timestamps for each frame in the video
         assert self.curr_traj_data is not None, f"No data found for {trajectory_id=}"

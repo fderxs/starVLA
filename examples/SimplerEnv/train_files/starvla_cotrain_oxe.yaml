@@ -72,6 +72,7 @@ datasets:
     obs: ["image_0"]
     image_size: [224,224]
     video_backend: torchvision_av
+    use_preprocessed_frames: true
     # action_mode_state_map: {"roll":"rx", "pitch":"ry", "yaw":"rz"}
     
 trainer:
