@@ -1,34 +1,31 @@
 #!/bin/bash
-export sim_python=/mnt/volumes/base-3da-ali-sh-mix/xswang/miniconda3/envs/simpler_env/bin/python
+
+###########################################################################################
+your_ckpt=$1
+gpu_id=$2
+
+# === Please modify the following paths according to your environment ===
 export SimplerEnv_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/SimplerEnv
+
 export PYTHONPATH=$(pwd):${PYTHONPATH}
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=$gpu_id
 #### set environment variables #####
-
-#### get parameters #####
-if [ -n "$1" ]; then
-  MODEL_PATH="$1" # model path indict the output tree
-else
-  MODEL_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/pretrained/StarVLA/StarVLA__Qwen3VL-GR00T-Bridge-RT-1/25-10-16-1401/checkpoints/steps_20000_pytorch_model.pt
-fi
-
-port=${2:-12900} # connect to your policy server port
-
+host="127.0.0.1"
+port=569$gpu_id
 
 #### build output directory #####
-ckpt_path=${MODEL_PATH}
-ckpt_dir=$(dirname "${ckpt_path}")
-ckpt_base=$(basename "${ckpt_path}")
-ckpt_name="${ckpt_base%.*}"
+ckpt_path=${your_ckpt}
 
 # Create output directories
-output_server_dir="${ckpt_dir}/output_server"
-output_eval_dir="${ckpt_dir}/output_eval"
-mkdir -p "${output_server_dir}"
-mkdir -p "${output_eval_dir}"
-#### build output directory #####
+folder_name=$(echo "$your_ckpt" | awk -F'/' '{print $(NF-2)"/"$NF}')
+video_folder_name=$(echo "$your_ckpt" | awk -F'/' '{print $(NF-2)}')
 
-TSET_NUM=1
+LOG_DIR="logs/widowx/${folder_name}"
+mkdir -p ${LOG_DIR}
+VIDEO_DIR="results/videos/widowx/${video_folder_name}"
+mkdir -p ${VIDEO_DIR}
+
+TEST_NUM=1
 # export DEBUG=1
 
 scene_name=bridge_table_1_v1
@@ -38,19 +35,21 @@ robot_init_x=0.147
 robot_init_y=0.028
 
 declare -a ENV_NAMES=(
-  # StackGreenCubeOnYellowCubeBakedTexInScene-v0
-  # PutCarrotOnPlateInScene-v0
-  # PutSpoonOnTableClothInScene-v0
+  StackGreenCubeOnYellowCubeBakedTexInScene-v0
+  PutCarrotOnPlateInScene-v0
+  PutSpoonOnTableClothInScene-v0
 )
 
 for i in "${!ENV_NAMES[@]}"; do
   env="${ENV_NAMES[i]}"
-  for ((run_idx=1; run_idx<=TSET_NUM; run_idx++)); do
+  for ((run_idx=1; run_idx<=TEST_NUM; run_idx++)); do
   # Path for log file
-    task_log="${output_eval_dir}/${ckpt_name}_${env}_run${run_idx}.log"
+    task_log="${LOG_DIR}/${env}"
+    mkdir -p ${task_log}
     echo "▶️ Launching task [${env}] run#${run_idx}, log → ${task_log}"
 
-    ${sim_python} examples/SimplerEnv/eval_files/start_simpler_env.py \
+    torchrun --nproc_per_node=1 --master_port=2591$gpu_id \
+      examples/SimplerEnv/eval_files/start_simpler_env.py \
       --ckpt-path ${ckpt_path} \
       --port ${port} \
       --robot ${robot} \
@@ -67,7 +66,8 @@ for i in "${!ENV_NAMES[@]}"; do
       --obj-episode-range 0 24 \
       --robot-init-rot-quat-center 0 0 0 1 \
       --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
-      > "${task_log}" 2>&1 &
+      --logging-dir ${VIDEO_DIR} \
+      2>&1 | tee "${task_log}/run_${run_idx}.log"
 
     sleep 6
 
@@ -86,12 +86,13 @@ robot_init_y=0.06
 
 for i in "${!ENV_NAMES_V2[@]}"; do
   env="${ENV_NAMES_V2[i]}"
-  for ((run_idx=1; run_idx<=TSET_NUM; run_idx++)); do
+  for ((run_idx=1; run_idx<=TEST_NUM; run_idx++)); do
   # Path for log file
-    task_log="${output_eval_dir}/${ckpt_name}_${env}_run${run_idx}.log"
+    task_log="${LOG_DIR}/${env}"
+    mkdir -p ${task_log}
     echo "▶️ Launching V2 task [${env}] run#${run_idx}, log → ${task_log}"
 
-    torchrun --nproc_per_node=1 --master_port=25910\
+    torchrun --nproc_per_node=1 --master_port=2591$gpu_id \
       examples/SimplerEnv/eval_files/start_simpler_env.py\
       --ckpt-path ${ckpt_path} \
       --port ${port} \
@@ -109,7 +110,8 @@ for i in "${!ENV_NAMES_V2[@]}"; do
       --obj-episode-range 0 24 \
       --robot-init-rot-quat-center 0 0 0 1 \
       --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
-      > "${task_log}" 2>&1 &
+      --logging-dir ${VIDEO_DIR} \
+      2>&1 | tee "${task_log}/run_${run_idx}.log"
 
     sleep 6
   done
