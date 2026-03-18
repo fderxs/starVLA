@@ -2,14 +2,14 @@ run_id: starvla
 run_root_dir: results/Checkpoints
 seed: 42
 trackers: [jsonl, wandb]
-wandb_entity: your_wandb_entity
-wandb_project: llavavla
+wandb_entity: fderxs
+wandb_project: starVLA_simpler_env
 is_debug: false
 
 framework:
   name: QwenGR00T
   qwenvl:
-    base_vlm: ./playground/Pretrained_models/Qwen2.5-VL-3B-Instruct-Action
+    base_vlm: ./playground/Pretrained_models/Qwen2.5-VL-3B-Instruct
     attn_implementation: flash_attention_2
     vl_hidden_dim: 2048
   dino:
@@ -17,8 +17,8 @@ framework:
 
   action_model:
     action_model_type: DiT-B
-    action_hidden_dim: 1024     # TODO merge with hidden_size, in config v2
-    hidden_size: 1024     
+    hidden_size: 1024     # Matches the final DiT projection, used by the ActionDecoder
+    action_hidden_dim: 2048
     add_pos_embed: True
     max_seq_len: 1024
     action_dim: 7
@@ -49,11 +49,11 @@ datasets:
   vlm_data:
     dataset_py: vlm_datasets
     dataformat: llava_json
-    dataset_use: sharegpt4v_coco
-    eval_dataset: sharegpt4v_coco
+    dataset_use: aokvqa_cauldron_llava_format,sharegpt4v_coco,sharegpt4v_knowledge,sharegpt4v_llava,sharegpt4v_sam,asv2_conversation_en,asv2_detailed_description_en,asv2_region_captioning_en,coco_internvl_longcap_en,coco_karpathy_train_567_en,coco_negative_gpt4o_en,coco_poetry_zh,coco_rem_en_zh,cocorem_exist_yorn_en,cocotextv2_en,cocotextv2_gpt4o_en,okvqa_en,refcoco_grounding_aug_en,refcoco_grounding_en,tallyqa_coco_en,toloka_grounding_aug_en,vqav2_en,vsr_en
+    eval_dataset: aokvqa_cauldron_llava_format
     data_flatten: false
     base_interval: 2
-    max_pixels: 307200
+    max_pixels: 50176
     min_pixels: 784
     model_max_length: 2048
     model_type: qwen2.5vl
@@ -61,9 +61,10 @@ datasets:
 
   vla_data:
     dataset_py: lerobot_datasets
-    data_root_dir: playground/Datasets/OXE_LEROBOT_DATASET
+    data_root_dir: playground/Datasets
     data_mix: bridge_rt_1 # bridge_rt_1
     action_type: delta_ee
+    sequential_step_sampling: False
     CoT_prompt: "Your task is {instruction}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format."
     CoT_answer: bbox
     default_image_resolution: [3, 224, 224]
@@ -78,11 +79,11 @@ datasets:
 trainer:
   epochs: 100
   max_train_steps: 100000
-  num_warmup_steps: 5000
-  save_interval: 5000
+  num_warmup_steps: 10000
+  save_interval: 2000
   eval_interval: 100
   learning_rate:
-    base: 2.5e-05
+    base: 3.0e-05
     qwen_vl_interface: 1.0e-05
     action_model: 1.0e-04
   lr_scheduler_type: cosine_with_min_lr
@@ -92,6 +93,7 @@ trainer:
   loss_scale:
     vla: 1.0
     vlm: 0.1
+  repeated_diffusion_steps: 4
   max_grad_norm: 1.0
   warmup_ratio: 0.1
   weight_decay: 0.0
@@ -106,7 +108,7 @@ trainer:
     weight_decay: 1.0e-08
 
   # parameters to be determined
-  is_resume: false
+  is_resume: true
   resume_epoch: null
   resume_step: null
   enable_gradient_checkpointing: true
