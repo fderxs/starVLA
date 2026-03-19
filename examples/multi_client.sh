@@ -2,7 +2,7 @@ n=8
 ckpt_path=$1
 init_step=$2
 benchmark=$3
-gap=10000
+gap=4000
 
 if [ "$benchmark" == "widowx" ] || [ "$benchmark" == "google_robot" ]; then
     bmk_file_name="SimplerEnv"
@@ -19,8 +19,11 @@ for i in $(seq 1 $n); do
     ckpt_name=checkpoints/steps_${cur_step}_pytorch_model.pt
     ckpt=${ckpt_path}/${ckpt_name}
 
+    while [ ! -f $ckpt ]; do sleep 1; done
+    sleep 60
+
+    echo "Checkpoint $ckpt founded, running client $i on GPU $gpu_id, testing on $benchmark ..."
     bash examples/${bmk_file_name}/eval_files/run_eval_${benchmark}.sh $ckpt $gpu_id > /dev/null 2>&1 &
-    echo "Running client $i on GPU $gpu_id with checkpoint $ckpt, testing on $benchmark"
 done
 
 echo "Finished running clients"

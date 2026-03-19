@@ -3,7 +3,7 @@
 ###########################################################################################
 your_ckpt=$1
 gpu_id=$2
-
+start_run_id=${3:-1}
 # === Please modify the following paths according to your environment ===
 export SimplerEnv_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/SimplerEnv
 
@@ -25,25 +25,25 @@ mkdir -p ${LOG_DIR}
 VIDEO_DIR="results/videos/widowx/${video_folder_name}"
 mkdir -p ${VIDEO_DIR}
 
-TEST_NUM=1
+TEST_NUM=${4:-1}
 # export DEBUG=1
 
-scene_name=bridge_table_1_v1
-robot=widowx
-rgb_overlay_path=${SimplerEnv_PATH}/ManiSkill2_real2sim/data/real_inpainting/bridge_real_eval_1.png
-robot_init_x=0.147
-robot_init_y=0.028
+for ((run_idx=start_run_id; run_idx<=start_run_id+TEST_NUM-1; run_idx++)); do
+  scene_name=bridge_table_1_v1
+  robot=widowx
+  rgb_overlay_path=${SimplerEnv_PATH}/ManiSkill2_real2sim/data/real_inpainting/bridge_real_eval_1.png
+  robot_init_x=0.147
+  robot_init_y=0.028
 
-declare -a ENV_NAMES=(
-  StackGreenCubeOnYellowCubeBakedTexInScene-v0
-  PutCarrotOnPlateInScene-v0
-  PutSpoonOnTableClothInScene-v0
-)
+  declare -a ENV_NAMES=(
+    StackGreenCubeOnYellowCubeBakedTexInScene-v0
+    PutCarrotOnPlateInScene-v0
+    PutSpoonOnTableClothInScene-v0
+  )
 
-for i in "${!ENV_NAMES[@]}"; do
-  env="${ENV_NAMES[i]}"
-  for ((run_idx=1; run_idx<=TEST_NUM; run_idx++)); do
-  # Path for log file
+  for i in "${!ENV_NAMES[@]}"; do
+    env="${ENV_NAMES[i]}"
+    # Path for log file
     task_log="${LOG_DIR}/${env}"
     mkdir -p ${task_log}
     echo "▶️ Launching task [${env}] run#${run_idx}, log → ${task_log}"
@@ -68,26 +68,22 @@ for i in "${!ENV_NAMES[@]}"; do
       --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
       --logging-dir ${VIDEO_DIR} \
       2>&1 | tee "${task_log}/run_${run_idx}.log"
-
-    sleep 6
-
   done
-done
 
-declare -a ENV_NAMES_V2=(
-  PutEggplantInBasketScene-v0
-)
+  declare -a ENV_NAMES_V2=(
+    PutEggplantInBasketScene-v0
+  )
 
-scene_name=bridge_table_1_v2
-robot=widowx_sink_camera_setup
-rgb_overlay_path=${SimplerEnv_PATH}/ManiSkill2_real2sim/data/real_inpainting/bridge_sink.png
-robot_init_x=0.127
-robot_init_y=0.06
+  scene_name=bridge_table_1_v2
+  robot=widowx_sink_camera_setup
+  rgb_overlay_path=${SimplerEnv_PATH}/ManiSkill2_real2sim/data/real_inpainting/bridge_sink.png
+  robot_init_x=0.127
+  robot_init_y=0.06
 
-for i in "${!ENV_NAMES_V2[@]}"; do
-  env="${ENV_NAMES_V2[i]}"
-  for ((run_idx=1; run_idx<=TEST_NUM; run_idx++)); do
-  # Path for log file
+  for i in "${!ENV_NAMES_V2[@]}"; do
+    env="${ENV_NAMES_V2[i]}"
+  
+    # Path for log file
     task_log="${LOG_DIR}/${env}"
     mkdir -p ${task_log}
     echo "▶️ Launching V2 task [${env}] run#${run_idx}, log → ${task_log}"
@@ -112,9 +108,6 @@ for i in "${!ENV_NAMES_V2[@]}"; do
       --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
       --logging-dir ${VIDEO_DIR} \
       2>&1 | tee "${task_log}/run_${run_idx}.log"
-
-    sleep 6
   done
 done
-
 echo "✅ Finished"

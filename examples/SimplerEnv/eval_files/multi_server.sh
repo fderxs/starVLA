@@ -1,12 +1,10 @@
 n=8
-ckpt_path=$1
-init_step=$2
-gap=4000
 
 for i in $(seq 1 $n); do
     gpu_id=$((i-1))
-    cur_step=$((init_step + (i-1) * gap))
+    cur_step=20000
 
+    ckpt_path=results/Checkpoints/bridge_rt_1_qwen3gr00t
     ckpt_name=checkpoints/steps_${cur_step}_pytorch_model.pt
     ckpt=${ckpt_path}/${ckpt_name}
 
