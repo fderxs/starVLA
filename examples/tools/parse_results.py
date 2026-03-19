@@ -28,7 +28,7 @@ def extract_libero_success_rate(log_file):
 
 
 def extract_widowx_success_rate(log_file):
-    """Extract the average success rate from a WidowX run_1.log file"""
+    """Extract the average success rate from a WidowX run log file"""
     if not os.path.exists(log_file):
         return None
     try:
@@ -43,6 +43,38 @@ def extract_widowx_success_rate(log_file):
     except Exception as e:
         print(f"Error reading {log_file}: {e}")
         return None
+
+
+def extract_widowx_all_runs(task_dir):
+    """Extract success rates from all run_X.log files in a task directory"""
+    if not task_dir.exists():
+        return None
+
+    # Find all run_X.log files and sort by run number
+    run_files = sorted(task_dir.glob("run_*.log"),
+                      key=lambda x: int(re.search(r'run_(\d+)', x.name).group(1)))
+    if not run_files:
+        return None
+
+    success_rates = []
+    success_idxs = []
+    for run_file in run_files:
+        rate = extract_widowx_success_rate(run_file)
+        if rate is not None:
+            success_rates.append(rate)
+            success_idxs.append(int(re.search(r'run_(\d+)', run_file.name).group(1)))
+
+    if not success_rates:
+        return None
+
+    return {
+        'rates': success_rates,
+        'mean': sum(success_rates) / len(success_rates),
+        'max': max(success_rates),
+        'min': min(success_rates),
+        'count': len(success_rates),
+        'idxs': success_idxs
+    }
 
 
 def extract_calvin_results(log_file):
@@ -144,7 +176,7 @@ def parse_libero_results(base_dir, model_name):
         for task in tasks:
             success_rate = results[checkpoint].get(task)
             if success_rate is not None:
-                cell = f"{success_rate*100:5.1f}% ({success_rate:.3f})"
+                cell = f"{success_rate*100:04.1f}%"
                 row += f"{cell:^{col_width}s}"
                 valid_results.append(success_rate)
             else:
@@ -152,7 +184,7 @@ def parse_libero_results(base_dir, model_name):
 
         if valid_results:
             avg_rate = sum(valid_results) / len(valid_results)
-            cell = f"{avg_rate*100:5.1f}% ({avg_rate:.3f})"
+            cell = f"{avg_rate*100:04.1f}%"
             row += f"{cell:^{col_width}s}"
         else:
             row += f"{'N/A':^{col_width}s}"
@@ -162,10 +194,8 @@ def parse_libero_results(base_dir, model_name):
     print("=" * total_width)
 
 
-def parse_widowx_results(base_dir, model_name):
+def parse_widowx_results(base_dir, model_name, show_all_runs=False):
     """Parse WidowX results"""
-    if model_name is None: 
-        model_name = "StarVLA__Qwen3VL-GR00T-Bridge-RT-1"
     model_dir = base_dir / model_name
     if not model_dir.exists():
         print(f"Warning: Model directory not found: {model_dir}")
@@ -191,8 +221,9 @@ def parse_widowx_results(base_dir, model_name):
         if checkpoint_dir.is_dir() and checkpoint_dir.name.startswith("steps_"):
             checkpoint_steps.add(checkpoint_dir.name)
             for task in all_tasks:
-                log_file = checkpoint_dir / task / "run_1.log"
-                results[checkpoint_dir.name][task] = extract_widowx_success_rate(log_file)
+                task_dir = checkpoint_dir / task
+                # Extract all runs for this task
+                results[checkpoint_dir.name][task] = extract_widowx_all_runs(task_dir)
 
     sorted_checkpoints = sorted(checkpoint_steps, key=lambda x: int(re.search(r'steps_(\d+)', x).group(1)))
 
@@ -212,23 +243,27 @@ def parse_widowx_results(base_dir, model_name):
     print(header)
     print("-" * total_width)
 
+    # Print mean row for each checkpoint
     for checkpoint in sorted_checkpoints:
         step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
         row = f"steps_{step_num:<9s}"
-        valid_results = []
+        valid_means = []
 
         for task in all_tasks:
-            success_rate = results[checkpoint].get(task)
-            if success_rate is not None:
-                cell = f"{success_rate*100:4.1f}% ({success_rate:.3f})"
+            task_result = results[checkpoint].get(task)
+            if task_result is not None:
+                mean_rate = task_result['mean']
+                count = task_result['count']
+                # Show count in brackets if more than 1 run
+                cell = f"{mean_rate*100:04.1f}% [{count:>02d}]"
                 row += f"{cell:^{task_col_width}s}"
-                valid_results.append(success_rate)
+                valid_means.append(mean_rate)
             else:
                 row += f"{'N/A':^{task_col_width}s}"
 
-        if valid_results:
-            avg_rate = sum(valid_results) / len(valid_results)
-            cell = f"{avg_rate*100:5.1f}% ({avg_rate:.3f})"
+        if valid_means:
+            avg_mean = sum(valid_means) / len(valid_means)
+            cell = f"{avg_mean*100:04.1f}%"
             row += f"{cell:^17s}"
         else:
             row += f"{'N/A':^17s}"
@@ -237,6 +272,100 @@ def parse_widowx_results(base_dir, model_name):
 
     print("=" * total_width)
 
+    # Show detailed results for all runs if requested
+    if show_all_runs:
+        print()
+        print("=" * total_width)
+        print("Detailed Results for All Runs (Multiple Runs Only)")
+        print("=" * total_width)
+
+        has_detailed_output = False
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+
+            # Check if this checkpoint has any task with multiple runs
+            has_multiple_runs = any(
+                results[checkpoint].get(task) is not None and results[checkpoint].get(task)['count'] > 1
+                for task in all_tasks
+            )
+
+            if not has_multiple_runs:
+                continue
+
+            has_detailed_output = True
+            print()
+            print(f"Checkpoint: steps_{step_num}")
+            print("-" * total_width)
+
+            # Find max number of runs across all tasks for this checkpoint
+            max_runs = 0
+            for task in all_tasks:
+                task_result = results[checkpoint].get(task)
+                if task_result is not None:
+                    max_runs = max(max_runs, len(task_result['rates']))
+
+            if max_runs == 0:
+                continue
+
+            # Print header
+            header = f"{'Run':<15s}"
+            for task in all_tasks:
+                task_display = shorten_widowx_task_name(task)
+                header += f"{task_display:^{task_col_width}s}"
+            header += f"{'Average':^17s}"
+            print(header)
+            print("-" * total_width)
+
+            # Print each run
+            for run_idx in range(max_runs):
+                row = f"Run {run_idx+1:<11d}"
+                valid_rates = []
+
+                for task in all_tasks:
+                    task_result = results[checkpoint].get(task)
+                    if task_result is not None and (run_idx+1) in task_result['idxs']:
+                        real_idx = task_result['idxs'].index(run_idx+1)
+                        rate = task_result['rates'][real_idx]
+                        cell = f"{rate*100:04.1f}%"
+                        row += f"{cell:^{task_col_width}s}"
+                        valid_rates.append(rate)
+                    else:
+                        row += f"{'-':^{task_col_width}s}"
+
+                if valid_rates:
+                    avg_rate = sum(valid_rates) / len(valid_rates)
+                    cell = f"{avg_rate*100:04.1f}%"
+                    row += f"{cell:^17s}"
+                else:
+                    row += f"{'-':^17s}"
+
+                print(row)
+
+            for metric in ['Mean', 'Max', 'Min']:
+                row = f"{metric:<15s}"
+                valid_metrics = []
+                for task in all_tasks:
+                    task_result = results[checkpoint].get(task)
+                    if task_result is not None:
+                        mean_rate = task_result[metric.lower()]
+                        cell = f"{mean_rate*100:04.1f}%"
+                        row += f"{cell:^{task_col_width}s}"
+                        valid_metrics.append(mean_rate)
+                    else:
+                        row += f"{'N/A':^{task_col_width}s}"
+
+                if valid_metrics:
+                    avg_metric = sum(valid_metrics) / len(valid_metrics)
+                    cell = f"{avg_metric*100:04.1f}%"
+                    row += f"{cell:^17s}"
+                else:
+                    row += f"{'N/A':^17s}"
+                print(row)
+
+        if not has_detailed_output:
+            print("No checkpoints with multiple runs found.")
+
+        print("=" * total_width)
 
 def parse_calvin_results(base_dir, model_name):
     """Parse CALVIN results"""
@@ -291,7 +420,7 @@ def parse_calvin_results(base_dir, model_name):
                     if metric == 'avg_len':
                         cell = f"{value:.3f}"
                     else:
-                        cell = f"{value*100:4.1f}%({value:.3f})"
+                        cell = f"{value*100:04.1f}%"
                     row += f"{cell:^{col_width}s}"
                 else:
                     row += f"{'N/A':^{col_width}s}"
@@ -313,6 +442,9 @@ Examples:
   # Parse WidowX results
   python parse_results.py -b widowx -m StarVLA__Qwen3VL-GR00T-Bridge-RT-1
 
+  # Parse WidowX results with all runs displayed
+  python parse_results.py -b widowx -m StarVLA__Qwen3VL-GR00T-Bridge-RT-1 --show_all_runs
+
   # Parse CALVIN results
   python parse_results.py -b calvin -m calvin_task_D_D_qwen3gr00t
 
@@ -323,10 +455,12 @@ Examples:
     parser.add_argument('-b', '--benchmark', type=str, required=True,
                         choices=['libero', 'widowx', 'calvin'],
                         help='Benchmark type: libero, widowx, or calvin')
-    parser.add_argument('-m', '--model_name', type=str, nargs='+',
+    parser.add_argument('-m', '--model_name', type=str, nargs='+', required=True,
                         help='Model name(s) to parse results for. Can specify multiple models.')
     parser.add_argument('--log_dir', type=str, default='logs',
                         help='Log directory path (default: logs)')
+    parser.add_argument('--show_all_runs', action='store_true',
+                        help='Show detailed results for all runs (WidowX only)')
 
     args = parser.parse_args()
 
@@ -336,7 +470,7 @@ Examples:
         parse_func = parse_libero_results
     elif args.benchmark == 'widowx':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'widowx'
-        parse_func = parse_widowx_results
+        parse_func = lambda bd, mn: parse_widowx_results(bd, mn, args.show_all_runs)
     elif args.benchmark == 'calvin':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'calvin'
         parse_func = parse_calvin_results
@@ -345,11 +479,9 @@ Examples:
         return
 
     # Parse and display results for each model
-    if args.model_name is None or len(args.model_name) < 1:
-        parse_func(base_dir, None)
-        return
     for i, model_name in enumerate(args.model_name):
-        if i > 0: print("\n")
+        if i > 0:
+            print("\n\n")
         parse_func(base_dir, model_name)
 
 
