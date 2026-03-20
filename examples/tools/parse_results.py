@@ -133,6 +133,50 @@ def shorten_widowx_task_name(task_name):
     return name
 
 
+def extract_google_robot_success_rate(log_file):
+    """Extract the average success rate from a Google Robot eval.log file
+
+    Google Robot logs contain multiple test episodes, each with an 'Average success' value.
+    We need to collect all these values and compute their mean.
+    """
+    if not os.path.exists(log_file):
+        return None
+    try:
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+            success_rates = []
+            for line in lines:
+                if "Average success" in line:
+                    match = re.search(r'Average success\s+([\d.]+)', line)
+                    if match:
+                        success_rates.append(float(match.group(1)))
+
+            if success_rates:
+                return sum(success_rates) / len(success_rates)
+            return None
+    except Exception as e:
+        print(f"Error reading {log_file}: {e}")
+        return None
+
+
+def shorten_google_robot_task_name(task_name):
+    """Shorten Google Robot task name for display"""
+    abbreviations = {
+        'drawer_variant_agg': 'Drawer-VA',
+        'drawer_visual_matching': 'Drawer-VM',
+        'move_near_variant_agg': 'MoveNear-VA',
+        'move_near_visual_matching': 'MoveNear-VM',
+        'pick_coke_can_variant_agg': 'PickCoke-VA',
+        'pick_coke_can_visual_matching': 'PickCoke-VM',
+        'put_in_drawer_variant_agg': 'PutDrawer-VA',
+        'put_in_drawer_visual_matching': 'PutDrawer-VM',
+    }
+    if task_name in abbreviations:
+        return abbreviations[task_name]
+    # Fallback: capitalize and truncate
+    return task_name.replace('_', ' ').title()[:15]
+
+
 def parse_libero_results(base_dir, model_name):
     """Parse LIBERO results"""
     tasks = ["libero_10", "libero_goal", "libero_object", "libero_spatial"]
@@ -176,7 +220,7 @@ def parse_libero_results(base_dir, model_name):
         for task in tasks:
             success_rate = results[checkpoint].get(task)
             if success_rate is not None:
-                cell = f"{success_rate*100:04.1f}%"
+                cell = f"{success_rate*100:5.1f}%"
                 row += f"{cell:^{col_width}s}"
                 valid_results.append(success_rate)
             else:
@@ -184,7 +228,7 @@ def parse_libero_results(base_dir, model_name):
 
         if valid_results:
             avg_rate = sum(valid_results) / len(valid_results)
-            cell = f"{avg_rate*100:04.1f}%"
+            cell = f"{avg_rate*100:5.1f}%"
             row += f"{cell:^{col_width}s}"
         else:
             row += f"{'N/A':^{col_width}s}"
@@ -255,7 +299,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
                 mean_rate = task_result['mean']
                 count = task_result['count']
                 # Show count in brackets if more than 1 run
-                cell = f"{mean_rate*100:04.1f}% [{count:>02d}]"
+                cell = f"{mean_rate*100:4.1f}% [{count:2d}]"
                 row += f"{cell:^{task_col_width}s}"
                 valid_means.append(mean_rate)
             else:
@@ -263,7 +307,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
 
         if valid_means:
             avg_mean = sum(valid_means) / len(valid_means)
-            cell = f"{avg_mean*100:04.1f}%"
+            cell = f"{avg_mean*100:5.1f}%"
             row += f"{cell:^17s}"
         else:
             row += f"{'N/A':^17s}"
@@ -326,7 +370,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
                     if task_result is not None and (run_idx+1) in task_result['idxs']:
                         real_idx = task_result['idxs'].index(run_idx+1)
                         rate = task_result['rates'][real_idx]
-                        cell = f"{rate*100:04.1f}%"
+                        cell = f"{rate*100:4.1f}%"
                         row += f"{cell:^{task_col_width}s}"
                         valid_rates.append(rate)
                     else:
@@ -334,7 +378,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
 
                 if valid_rates:
                     avg_rate = sum(valid_rates) / len(valid_rates)
-                    cell = f"{avg_rate*100:04.1f}%"
+                    cell = f"{avg_rate*100:4.1f}%"
                     row += f"{cell:^17s}"
                 else:
                     row += f"{'-':^17s}"
@@ -348,7 +392,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
                     task_result = results[checkpoint].get(task)
                     if task_result is not None:
                         mean_rate = task_result[metric.lower()]
-                        cell = f"{mean_rate*100:04.1f}%"
+                        cell = f"{mean_rate*100:4.1f}%"
                         row += f"{cell:^{task_col_width}s}"
                         valid_metrics.append(mean_rate)
                     else:
@@ -356,7 +400,7 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
 
                 if valid_metrics:
                     avg_metric = sum(valid_metrics) / len(valid_metrics)
-                    cell = f"{avg_metric*100:04.1f}%"
+                    cell = f"{avg_metric*100:4.1f}%"
                     row += f"{cell:^17s}"
                 else:
                     row += f"{'N/A':^17s}"
@@ -420,7 +464,7 @@ def parse_calvin_results(base_dir, model_name):
                     if metric == 'avg_len':
                         cell = f"{value:.3f}"
                     else:
-                        cell = f"{value*100:04.1f}%"
+                        cell = f"{value*100:4.1f}%"
                     row += f"{cell:^{col_width}s}"
                 else:
                     row += f"{'N/A':^{col_width}s}"
@@ -430,9 +474,120 @@ def parse_calvin_results(base_dir, model_name):
     print("=" * total_width)
 
 
+def parse_google_robot_results(base_dir, model_name):
+    """Parse Google Robot results"""
+    # Google Robot tasks grouped by type
+    va_tasks = [
+        'drawer_variant_agg',
+        'move_near_variant_agg',
+        'pick_coke_can_variant_agg',
+        'put_in_drawer_variant_agg',
+    ]
+    vm_tasks = [
+        'drawer_visual_matching',
+        'move_near_visual_matching',
+        'pick_coke_can_visual_matching',
+        'put_in_drawer_visual_matching',
+    ]
+    all_tasks = va_tasks + vm_tasks
+
+    model_dir = base_dir / model_name
+    if not model_dir.exists():
+        print(f"Warning: Model directory not found: {model_dir}")
+        return
+
+    results = defaultdict(dict)
+    checkpoint_steps = set()
+
+    # Parse all log files
+    for checkpoint_dir in sorted(model_dir.iterdir()):
+        if checkpoint_dir.is_dir() and checkpoint_dir.name.startswith("steps_"):
+            checkpoint_steps.add(checkpoint_dir.name)
+            for task in all_tasks:
+                log_file = checkpoint_dir / task / "eval.log"
+                results[checkpoint_dir.name][task] = extract_google_robot_success_rate(log_file)
+
+    if not checkpoint_steps:
+        print(f"Warning: No checkpoints found for model: {model_name}")
+        return
+
+    sorted_checkpoints = sorted(checkpoint_steps, key=lambda x: int(re.search(r'steps_(\d+)', x).group(1)))
+
+    # Column widths
+    col_width = 12
+    avg_width = 10
+    total_width = 15 + col_width * 8 + avg_width * 3
+
+    print("=" * total_width)
+    print(f"Model: {model_name}")
+    print("=" * total_width)
+    print()
+
+    # Print header
+    header = f"{'Checkpoint':<15s}"
+    for task in vm_tasks:
+        task_display = shorten_google_robot_task_name(task)
+        header += f"{task_display:^{col_width}s}"
+    for task in va_tasks:
+        task_display = shorten_google_robot_task_name(task)
+        header += f"{task_display:^{col_width}s}"
+    header += f"{'VM-Avg':^{avg_width}s}"
+    header += f"{'VA-Avg':^{avg_width}s}"
+    print(header)
+    print("-" * total_width)
+
+    # Print results for each checkpoint
+    for checkpoint in sorted_checkpoints:
+        step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+        row = f"steps_{step_num:<9s}"
+
+        va_results = []
+        vm_results = []
+
+        # VM tasks
+        for task in vm_tasks:
+            success_rate = results[checkpoint].get(task)
+            if success_rate is not None:
+                cell = f"{success_rate*100:4.1f}%"
+                row += f"{cell:^{col_width}s}"
+                vm_results.append(success_rate)
+            else:
+                row += f"{'N/A':^{col_width}s}"
+
+        # VA tasks
+        for task in va_tasks:
+            success_rate = results[checkpoint].get(task)
+            if success_rate is not None:
+                cell = f"{success_rate*100:4.1f}%"
+                row += f"{cell:^{col_width}s}"
+                va_results.append(success_rate)
+            else:
+                row += f"{'N/A':^{col_width}s}"        
+
+        # VM average
+        if vm_results:
+            vm_avg = sum(vm_results) / len(vm_results)
+            cell = f"{vm_avg*100:4.1f}%"
+            row += f"{cell:^{avg_width}s}"
+        else:
+            row += f"{'N/A':^{avg_width}s}"
+
+        # VA average
+        if va_results:
+            va_avg = sum(va_results) / len(va_results)
+            cell = f"{va_avg*100:4.1f}%"
+            row += f"{cell:^{avg_width}s}"
+        else:
+            row += f"{'N/A':^{avg_width}s}"
+
+        print(row)
+
+    print("=" * total_width)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Parse evaluation results from LIBERO, WidowX, and CALVIN benchmarks',
+        description='Parse evaluation results from LIBERO, WidowX, CALVIN, and Google Robot benchmarks',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -448,13 +603,16 @@ Examples:
   # Parse CALVIN results
   python parse_results.py -b calvin -m calvin_task_D_D_qwen3gr00t
 
+  # Parse Google Robot results
+  python parse_results.py -b google_robot -m bridge_rt_1_qwen3gr00t
+
   # Parse multiple models
   python parse_results.py -b libero -m model1 model2 model3
         """
     )
     parser.add_argument('-b', '--benchmark', type=str, required=True,
-                        choices=['libero', 'widowx', 'calvin'],
-                        help='Benchmark type: libero, widowx, or calvin')
+                        choices=['libero', 'widowx', 'calvin', 'google_robot'],
+                        help='Benchmark type: libero, widowx, calvin, or google_robot')
     parser.add_argument('-m', '--model_name', type=str, nargs='+', required=True,
                         help='Model name(s) to parse results for. Can specify multiple models.')
     parser.add_argument('--log_dir', type=str, default='logs',
@@ -474,6 +632,9 @@ Examples:
     elif args.benchmark == 'calvin':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'calvin'
         parse_func = parse_calvin_results
+    elif args.benchmark == 'google_robot':
+        base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'google_robot'
+        parse_func = parse_google_robot_results
     else:
         print(f"Unknown benchmark type: {args.benchmark}")
         return
