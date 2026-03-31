@@ -53,6 +53,17 @@ DATASET_NAMED_MIXTURES = {
         # Calvin datasets - ABC and D scenarios
         ("calvin_abc_d_1.0.0_lerobot", 1.0, "libero_franka"),
     ],
+     "bridge_fractal_libero": [
+        # Bridge dataset
+        ("bridge_orig_1.0.0_lerobot", 1.0, "oxe_bridge"),
+        # Fractal (RT-1) dataset
+        ("fractal20220817_data_0.1.0_lerobot", 1.0, "oxe_rt1"),
+        # Libero datasets
+        ("libero_object_no_noops_1.0.0_lerobot", 1.0, "libero_franka"),
+        ("libero_goal_no_noops_1.0.0_lerobot", 1.0, "libero_franka"),
+        ("libero_spatial_no_noops_1.0.0_lerobot", 1.0, "libero_franka"),
+        ("libero_10_no_noops_1.0.0_lerobot", 1.0, "libero_franka"),
+    ],
 
     "demo_sim_pick_place": [
         ("sim_pick_place", 1.0, "demo_sim_franka_delta_joints"),

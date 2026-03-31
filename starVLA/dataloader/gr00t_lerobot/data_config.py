@@ -464,7 +464,7 @@ class Libero4in1DataConfig:
     language_keys = ["annotation.human.action.task_description"]
 
     observation_indices = [0]
-    action_indices = list(range(8))
+    action_indices = list(range(16))  # Changed from 8 to 16 for consistency with Bridge/RT-1
 
 
     def modality_config(self):

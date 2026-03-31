@@ -42,5 +42,6 @@ for suite in $task_suite_name; do
         --args.task-suite-name "$suite" \
         --args.num-trials-per-task "$num_trials_per_task" \
         --args.video-out-path "$video_out_path" \
+        --args.unnorm-key "$unnorm_key" \
         2>&1 | tee "${LOG_DIR}/eval.log"
 done

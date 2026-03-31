@@ -54,6 +54,8 @@ class Args:
 
     job_name: str = "test"
 
+    unnorm_key: str = "franka"  # Dataset key for action unnormalization statistics
+
 
 def eval_libero(args: Args) -> None:
     logging.info(f"Arguments: {json.dumps(dataclasses.asdict(args), indent=4)}")
@@ -89,6 +91,7 @@ def eval_libero(args: Args) -> None:
         host=args.host,
         port=args.port,
         image_size=args.resize_size,
+        unnorm_key=args.unnorm_key,
     )
 
 

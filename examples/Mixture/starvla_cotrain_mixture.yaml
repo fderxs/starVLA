@@ -3,7 +3,7 @@ run_root_dir: results/Checkpoints
 seed: 42
 trackers: [jsonl, wandb]
 wandb_entity: fderxs
-wandb_project: starVLA_libero
+wandb_project: starVLA_mixture
 is_debug: false
 
 framework:
@@ -64,7 +64,7 @@ datasets:
     dataset_py: lerobot_datasets
     data_root_dir: playground/Datasets
     data_mix: libero_all # libero_goal
-    action_type: delta_qpos
+    action_type: delta_mixed
     sequential_step_sampling: False
     CoT_prompt: "Your task is {instruction}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format."
     CoT_answer: bbox
