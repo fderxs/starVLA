@@ -10,6 +10,8 @@ elif [ "$benchmark" == "libero" ]; then
     bmk_file_name="LIBERO"
 elif [ "$benchmark" == "calvin" ]; then
     bmk_file_name="calvin"
+elif [ "$benchmark" == "robotwin" ]; then
+    bmk_file_name="Robotwin"
 fi
 
 for i in $(seq 1 $n); do

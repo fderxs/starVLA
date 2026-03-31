@@ -177,6 +177,57 @@ def shorten_google_robot_task_name(task_name):
     return task_name.replace('_', ' ').title()[:15]
 
 
+def extract_robotwin_success_rates(log_file):
+    """Extract success rates from a Robotwin eval.log file
+
+    Returns a dict mapping task names to their final success rates.
+    Each task has 10 test runs, and we extract the final X/10 success rate.
+    """
+    if not os.path.exists(log_file):
+        return {}
+
+    try:
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+
+        # Pattern to match task name and success rate
+        # Task name uses ANSI color codes: \x1b[93m<task_name>\x1b[0m
+        # Success rate uses ANSI codes: Success rate: \x1b[96mX/10\x1b[0m => \x1b[95mYY.Y%\x1b[0m
+        task_results = {}
+
+        import re
+        # Match ANSI escape sequences: \x1b[XXm or \033[XXm
+        task_pattern = r'\x1b\[93m([^\x1b]+)\x1b\[0m'
+        success_pattern = r'Success rate:.*?\x1b\[96m(\d+)/(\d+)\x1b\[0m.*?\x1b\[95m([\d.]+)%\x1b\[0m'
+
+        # Iterate through lines and track task-success pairs
+        for i, line in enumerate(lines):
+            # Check if this line contains a task name
+            task_match = re.search(task_pattern, line)
+            if task_match:
+                task_name = task_match.group(1)
+
+                # Look for the next line with success rate
+                for j in range(i, min(i + 5, len(lines))):  # Check next few lines
+                    success_match = re.search(success_pattern, lines[j])
+                    if success_match:
+                        succeeded = int(success_match.group(1))
+                        total = int(success_match.group(2))
+                        percentage = float(success_match.group(3))
+
+                        # Only keep the final result (when total == 10)
+                        if total == 10:
+                            task_results[task_name] = percentage / 100.0
+                        break
+
+        return task_results
+
+    except Exception as e:
+        print(f"Error reading {log_file}: {e}")
+        return {}
+
+
+
 def parse_libero_results(base_dir, model_name):
     """Parse LIBERO results"""
     tasks = ["libero_10", "libero_goal", "libero_object", "libero_spatial"]
@@ -585,9 +636,138 @@ def parse_google_robot_results(base_dir, model_name):
     print("=" * total_width)
 
 
+def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
+    """Parse Robotwin results (clean and randomized)"""
+    model_dir = base_dir / model_name
+    if not model_dir.exists():
+        print(f"Warning: Model directory not found: {model_dir}")
+        return
+
+    results = defaultdict(lambda: {'clean': {}, 'randomized': {}})
+    checkpoint_steps = set()
+
+    # Parse all log files
+    for checkpoint_dir in sorted(model_dir.iterdir()):
+        if checkpoint_dir.is_dir() and checkpoint_dir.name.startswith("steps_"):
+            checkpoint_steps.add(checkpoint_dir.name)
+
+            # Parse clean results
+            clean_log = checkpoint_dir / "clean" / "eval.log"
+            clean_results = extract_robotwin_success_rates(clean_log)
+            results[checkpoint_dir.name]['clean'] = clean_results
+
+            # Parse randomized results
+            randomized_log = checkpoint_dir / "randomized" / "eval.log"
+            randomized_results = extract_robotwin_success_rates(randomized_log)
+            results[checkpoint_dir.name]['randomized'] = randomized_results
+
+    if not checkpoint_steps:
+        print(f"Warning: No checkpoints found for model: {model_name}")
+        return
+
+    sorted_checkpoints = sorted(checkpoint_steps, key=lambda x: int(re.search(r'steps_(\d+)', x).group(1)))
+
+    # Display results summary
+    col_width = 12
+    total_width = 15 + col_width * 3
+
+    print("=" * total_width)
+    print(f"Model: {model_name}")
+    print("=" * total_width)
+    print()
+
+    # Print header
+    header = f"{'Checkpoint':<15s}"
+    header += f"{'Clean':^{col_width}s}"
+    header += f"{'Randomized':^{col_width}s}"
+    header += f"{'Average':^{col_width}s}"
+    print(header)
+    print("-" * total_width)
+
+    # Print results for each checkpoint
+    for checkpoint in sorted_checkpoints:
+        step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+        row = f"steps_{step_num:<9s}"
+
+        # Calculate clean average
+        clean_tasks = results[checkpoint]['clean']
+        if clean_tasks:
+            clean_avg = sum(clean_tasks.values()) / len(clean_tasks) * 100
+            cell = f"{clean_avg:4.1f}%[{len(clean_tasks):2d}]"
+            row += f"{cell:^{col_width}s}"
+        else:
+            row += f"{'N/A':^{col_width}s}"
+
+        # Calculate randomized average
+        randomized_tasks = results[checkpoint]['randomized']
+        if randomized_tasks:
+            randomized_avg = sum(randomized_tasks.values()) / len(randomized_tasks) * 100
+            cell = f"{randomized_avg:4.1f}%[{len(randomized_tasks):2d}]"
+            row += f"{cell:^{col_width}s}"
+        else:
+            row += f"{'N/A':^{col_width}s}"
+
+        # Calculate overall average
+        all_rates = []
+        if clean_tasks:
+            all_rates.extend(clean_tasks.values())
+        if randomized_tasks:
+            all_rates.extend(randomized_tasks.values())
+
+        if all_rates:
+            overall_avg = sum(all_rates) / len(all_rates) * 100
+            cell = f"{overall_avg:4.1f}%[{len(all_rates):2d}]"
+            row += f"{cell:^{col_width}s}"
+        else:
+            row += f"{'N/A':^{col_width}s}"
+
+        print(row)
+
+    print("=" * total_width)
+
+    # Show detailed task results if requested
+    if show_all_runs:
+        print("\n")
+        print("=" * total_width)
+        print("Detailed Task Results")
+        print("=" * total_width)
+
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            clean_tasks = results[checkpoint]['clean']
+            randomized_tasks = results[checkpoint]['randomized']
+
+            if not clean_tasks and not randomized_tasks:
+                continue
+
+            print(f"\n{'='*total_width}")
+            print(f"Checkpoint: steps_{step_num}")
+            print(f"{'='*total_width}")
+
+            # Show Clean tasks
+            if clean_tasks:
+                print(f"\nClean Tasks ({len(clean_tasks)} tasks):")
+                print(f"{'-'*total_width}")
+                # Sort tasks by name
+                sorted_clean = sorted(clean_tasks.items())
+                for i, (task_name, success_rate) in enumerate(sorted_clean, 1):
+                    print(f"{i:2d}. {task_name:30s} {success_rate*100:5.1f}%")
+
+            # Show Randomized tasks
+            if randomized_tasks:
+                print(f"\nRandomized Tasks ({len(randomized_tasks)} tasks):")
+                print(f"{'-'*total_width}")
+                # Sort tasks by name
+                sorted_randomized = sorted(randomized_tasks.items())
+                for i, (task_name, success_rate) in enumerate(sorted_randomized, 1):
+                    print(f"{i:2d}. {task_name:30s} {success_rate*100:5.1f}%")
+
+        print(f"\n{'='*total_width}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Parse evaluation results from LIBERO, WidowX, CALVIN, and Google Robot benchmarks',
+        description='Parse evaluation results from LIBERO, WidowX, CALVIN, Google Robot, and Robotwin benchmarks',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -606,13 +786,16 @@ Examples:
   # Parse Google Robot results
   python parse_results.py -b google_robot -m bridge_rt_1_qwen3gr00t
 
+  # Parse Robotwin results
+  python parse_results.py -b robotwin -m robotwin_all_50_qwen3OFT_all
+
   # Parse multiple models
   python parse_results.py -b libero -m model1 model2 model3
         """
     )
     parser.add_argument('-b', '--benchmark', type=str, required=True,
-                        choices=['libero', 'widowx', 'calvin', 'google_robot'],
-                        help='Benchmark type: libero, widowx, calvin, or google_robot')
+                        choices=['libero', 'widowx', 'calvin', 'google_robot', 'robotwin'],
+                        help='Benchmark type: libero, widowx, calvin, google_robot, or robotwin')
     parser.add_argument('-m', '--model_name', type=str, nargs='+', required=True,
                         help='Model name(s) to parse results for. Can specify multiple models.')
     parser.add_argument('--log_dir', type=str, default='logs',
@@ -635,6 +818,9 @@ Examples:
     elif args.benchmark == 'google_robot':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'google_robot'
         parse_func = parse_google_robot_results
+    elif args.benchmark == 'robotwin':
+        base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'Robotwin'
+        parse_func = lambda bd, mn: parse_robotwin_results(bd, mn, args.show_all_runs)
     else:
         print(f"Unknown benchmark type: {args.benchmark}")
         return
