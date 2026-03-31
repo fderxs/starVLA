@@ -30,7 +30,9 @@ declare -a suites=(
     put_in_drawer_visual_matching
 )
 
-LOG_DIR="logs/google_robot/${folder_name}/${suites[$gpu_id]}"
-mkdir -p ${LOG_DIR}
-echo "Running suite: ${suites[$gpu_id]}"
-bash examples/SimplerEnv/eval_files/auto_eval_scripts/star_${suites[$gpu_id]}.sh ${ckpt_path} ${gpu_id} ${VIDEO_DIR} 2>&1 | tee "${LOG_DIR}/eval.log"
+for suite in "${suites[@]}"; do
+    LOG_DIR="logs/google_robot/${folder_name}/${suite}"
+    mkdir -p ${LOG_DIR}
+    echo "Running suite: ${suite}"
+    bash examples/SimplerEnv/eval_files/auto_eval_scripts/sub_eval/star_${suite}.sh ${ckpt_path} ${gpu_id} ${VIDEO_DIR} 2>&1 | tee "${LOG_DIR}/eval.log"
+done

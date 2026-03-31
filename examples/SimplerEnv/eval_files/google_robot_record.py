@@ -9,41 +9,49 @@ TASKS_DICT = {
         "env": ["GraspSingleOpenedCokeCanInScene-v0"],
         "extra": "urdf_version",
         "total": 300,
+        "sub_total": 12,
     },
     "pick_coke_can_va": {
         "scene": ["google_pick_coke_can_1_v4", "google_pick_coke_can_1_v4_alt_background", "google_pick_coke_can_1_v4_alt_background_2", "Baked_sc1_staging_objaverse_cabinet1_h870", "Baked_sc1_staging_objaverse_cabinet2_h870"],
         "env": ["GraspSingleOpenedCokeCanInScene-v0", "GraspSingleOpenedCokeCanDistractorInScene-v0", "GraspSingleOpenedCokeCanAltGoogleCameraInScene-v0", "GraspSingleOpenedCokeCanAltGoogleCamera2InScene-v0"],
         "total": 825,
+        "sub_total": 33,
     },
     "move_near_vm": {
         "scene": ["google_pick_coke_can_1_v4", "google_pick_coke_can_1_v4_alt_background", "google_pick_coke_can_1_v4_alt_background_2", "Baked_sc1_staging_objaverse_cabinet1_h870", "Baked_sc1_staging_objaverse_cabinet2_h870"],
         "env": ["MoveNearGoogleBakedTexInScene-v0"],
         "total": 240,
+        "sub_total": 24,
     },
     "move_near_va": {
         "scene": ["google_pick_coke_can_1_v4", "google_pick_coke_can_1_v4_alt_background", "google_pick_coke_can_1_v4_alt_background_2", "Baked_sc1_staging_objaverse_cabinet1_h870", "Baked_sc1_staging_objaverse_cabinet2_h870"],
         "env": ["MoveNearGoogleInScene-v0", "MoveNearAltGoogleCameraInScene-v0","MoveNearAltGoogleCamera2InScene-v0"],
         "total": 600,
+        "sub_total": 60,
     },
     "drawer_vm": {
         "scene": ["dummy_drawer"],
         "env": ["OpenTopDrawerCustomInScene-v0", "OpenMiddleDrawerCustomInScene-v0", "OpenBottomDrawerCustomInScene-v0", "CloseTopDrawerCustomInScene-v0", "CloseMiddleDrawerCustomInScene-v0", "CloseBottomDrawerCustomInScene-v0"],
         "total": 216,
+        "sub_total": 24,
     },
     "drawer_va": {
         "scene": ["frl_apartment_stage_simple", "modern_bedroom_no_roof", "modern_office_no_roof"],
         "env": ["OpenTopDrawerCustomInScene-v0", "OpenMiddleDrawerCustomInScene-v0", "OpenBottomDrawerCustomInScene-v0", "CloseTopDrawerCustomInScene-v0", "CloseMiddleDrawerCustomInScene-v0", "CloseBottomDrawerCustomInScene-v0"],
         "total": 378,
+        "sub_total": 42,
     },
     "put_in_drawer_vm": {
         "scene": ["dummy_drawer"],
         "env": ["PlaceIntoClosedTopDrawerCustomInScene-v0"],
         "total": 108,
+        "sub_total": 12,
     },
     "put_in_drawer_va": {
         "scene": ["frl_apartment_stage_simple", "modern_bedroom_no_roof", "modern_office_no_roof"],
         "env": ["PlaceIntoClosedTopDrawerCustomInScene-v0"],
         "total": 189,
+        "sub_total": 21,
     }
 }
 
@@ -87,6 +95,11 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--path", type=str, default="results/google_robot/configs_origin+fractal+b16+lr-0.0002+lora-r64+dropout-0.0--image_aug--libero--90000_chkpt")
     args.add_argument("--steps", type=str, default=None)
+    args.add_argument("-s", "--sub", action="store_true")
+
+    if args.sub:
+        for task, task_info in TASKS_DICT.items():
+            task_info["total"] = task_info["sub_total"]
     
     args = args.parse_args()
     if args.steps is not None:
