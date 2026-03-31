@@ -889,9 +889,14 @@ class LeRobotSingleDataset(Dataset):
 
     def _get_steps_config_key(self) -> str:
         """Generate a configuration key for steps caching."""
+        step_stride = 1
+        if self.data_cfg is not None:
+            step_stride = self.data_cfg.get("step_stride", 1)
+
         config_dict = {
             "delete_pause_frame": self.delete_pause_frame,
             "dataset_name": self.dataset_name,
+            "step_stride": step_stride,
         }
         # Create a hash of the configuration
         config_str = str(sorted(config_dict.items()))
@@ -903,7 +908,12 @@ class LeRobotSingleDataset(Dataset):
         all_steps: list[tuple[int, int]] = []
         skipped_trajectories = 0
         processed_trajectories = 0
-        
+
+        # Get step_stride from config (default=1 means no skipping)
+        step_stride = 1
+        if self.data_cfg is not None:
+            step_stride = self.data_cfg.get("step_stride", 1)
+
         # Check if language modality is configured
         has_language_modality = 'language' in self.modality_keys and len(self.modality_keys['language']) > 0
         # TODO why trajectory_length here, why not use data length?
@@ -935,14 +945,15 @@ class LeRobotSingleDataset(Dataset):
         
             if not trajectory_skipped:
                 processed_trajectories += 1
-        
-            for base_index in range(trajectory_length):
+
+            # Apply step_stride: sample every Nth frame
+            for base_index in range(0, trajectory_length, step_stride):
                 all_steps.append((trajectory_id, base_index))
                 
         # Print summary statistics
         print(f"Single-process summary: Processed {processed_trajectories} trajectories, skipped {skipped_trajectories} empty trajectories")
-        print(f"Total steps: {len(all_steps)} from {len(self.trajectory_ids)} trajectories")
-                   
+        print(f"Total steps: {len(all_steps)} from {len(self.trajectory_ids)} trajectories (step_stride={step_stride})")
+
         return all_steps
 
     def _get_position_and_gripper_values(self, data: pd.DataFrame) -> tuple[list, list]:
