@@ -1,8 +1,8 @@
-policy_name: starVLA
+policy_name: model2robotwin_interface
 task_name: null
 task_config: null
-ckpt_setting: null
-seed: null
+ckpt_setting: starvla_test
+seed: 0
 instruction_type: unseen
 
 # StarVLA Client Parameters
