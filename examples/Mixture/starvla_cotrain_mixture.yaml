@@ -74,6 +74,9 @@ datasets:
     obs: ["image_0"]
     video_backend: torchvision_av
     use_preprocessed_frames: true
+    # Dataset sampling balance parameters
+    balance_dataset_weights: false  # If true, weight sampling probability by dataset size (larger datasets sampled more)
+    balance_trajectory_weights: false  # If true, weight trajectory sampling by trajectory length (longer trajectories sampled more)
 
 
 trainer:

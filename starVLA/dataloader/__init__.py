@@ -39,7 +39,15 @@ def build_dataloader(cfg, dataset_py="lerobot_datasets_oxe"): # TODO now here on
         from starVLA.dataloader.lerobot_datasets import get_vla_dataset, collate_fn
         vla_dataset_cfg = cfg.datasets.vla_data
 
-        vla_dataset = get_vla_dataset(data_cfg=vla_dataset_cfg)
+        # Get balance parameters from config, default to False if not specified
+        balance_dataset_weights = vla_dataset_cfg.get("balance_dataset_weights", False)
+        balance_trajectory_weights = vla_dataset_cfg.get("balance_trajectory_weights", False)
+
+        vla_dataset = get_vla_dataset(
+            data_cfg=vla_dataset_cfg,
+            balance_dataset_weights=balance_dataset_weights,
+            balance_trajectory_weights=balance_trajectory_weights,
+        )
 
         num_workers = cfg.datasets.vla_data.get("num_workers", 0)
         prefetch_factor = cfg.datasets.vla_data.get("prefetch_factor", 2) if num_workers > 0 else None
