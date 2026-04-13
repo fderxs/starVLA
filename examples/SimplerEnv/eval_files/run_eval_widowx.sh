@@ -3,7 +3,8 @@
 ###########################################################################################
 your_ckpt=$1
 gpu_id=$2
-start_run_id=${3:-1}
+test_num=${3:-5}
+start_run_id=${4:-1}
 # === Please modify the following paths according to your environment ===
 export SimplerEnv_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/SimplerEnv
 
@@ -25,10 +26,7 @@ mkdir -p ${LOG_DIR}
 VIDEO_DIR="results/videos/widowx/${video_folder_name}"
 mkdir -p ${VIDEO_DIR}
 
-TEST_NUM=${4:-1}
-# export DEBUG=1
-
-for ((run_idx=start_run_id; run_idx<=start_run_id+TEST_NUM-1; run_idx++)); do
+for ((run_idx=start_run_id; run_idx<=start_run_id+test_num-1; run_idx++)); do
   scene_name=bridge_table_1_v1
   robot=widowx
   rgb_overlay_path=${SimplerEnv_PATH}/ManiSkill2_real2sim/data/real_inpainting/bridge_real_eval_1.png

@@ -1,5 +1,7 @@
 your_ckpt=$1
 gpu_id=$2
+test_num=${3:-5}
+start_run_id=${4:-1}
 
 # === Please modify the following paths according to your environment ===
 export SimplerEnv_PATH=/mnt/volumes/base-3da-ali-sh-mix/xswang/object/reference/SimplerEnv
@@ -30,9 +32,11 @@ declare -a suites=(
     put_in_drawer_visual_matching
 )
 
-for suite in "${suites[@]}"; do
-    LOG_DIR="logs/google_robot/${folder_name}/${suite}"
-    mkdir -p ${LOG_DIR}
-    echo "Running suite: ${suite}"
-    bash examples/SimplerEnv/eval_files/auto_eval_scripts/sub_eval/star_${suite}.sh ${ckpt_path} ${gpu_id} ${VIDEO_DIR} 2>&1 | tee "${LOG_DIR}/eval.log"
+for ((run_idx=start_run_id; run_idx<=start_run_id+test_num-1; run_idx++)); do
+    for suite in "${suites[@]}"; do
+        LOG_DIR="logs/google_robot/${folder_name}/${suite}"
+        mkdir -p ${LOG_DIR}
+        echo "Running suite: ${suite}"
+        bash examples/SimplerEnv/eval_files/auto_eval_scripts/sub_eval/star_${suite}.sh ${ckpt_path} ${gpu_id} ${VIDEO_DIR} 2>&1 | tee "${LOG_DIR}/eval_${run_idx}.log"
+    done
 done
