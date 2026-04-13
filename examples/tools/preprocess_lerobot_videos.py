@@ -17,14 +17,14 @@ Preprocessed:
 
 Usage:
     # Preprocess all datasets in a directory
-    python examples/preprocess_lerobot_videos.py \
+    python examples/tools/preprocess_lerobot_videos.py \
         --data_root /path/to/lerobot/datasets \
         --video_backend torchvision_av \
         --num_workers 8 \
         --compress
 
     # Preprocess specific datasets only
-    python examples/preprocess_lerobot_videos.py \
+    python examples/tools/preprocess_lerobot_videos.py \
         --data_root /path/to/lerobot/datasets \
         --datasets libero_spatial_no_noops_1.0.0_lerobot libero_goal_no_noops_1.0.0_lerobot \
         --num_workers 8

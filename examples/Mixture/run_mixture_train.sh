@@ -29,7 +29,7 @@ config_yaml=examples/Mixture/starvla_cotrain_mixture.yaml
 data_root=playground/Datasets
 data_mix=bridge_fractal_libero
 run_root_dir=results/Checkpoints
-run_id=${data_mix}_qwen3gr00t
+run_id=${data_mix}_qwen3gr00t_balance
 # === End of environment variable configuration ===
 ###########################################################################################
 
@@ -42,46 +42,47 @@ mkdir -p ${output_dir}
 cp $0 ${output_dir}/
 
 
-accelerate launch \
-  --config_file starVLA/config/deepseeds/deepspeed_zero2.yaml \
-  --num_processes 8 \
-  starVLA/training/train_starvla.py \
-  --config_yaml ${config_yaml} \
-  --framework.name ${Framework_name} \
-  --framework.qwenvl.base_vlm ${base_vlm} \
-  --datasets.vla_data.data_root_dir ${data_root}\
-  --datasets.vla_data.data_mix ${data_mix} \
-  --datasets.vla_data.per_device_batch_size 32 \
-  --datasets.vla_data.num_workers 32 \
-  --trainer.freeze_modules ${freeze_module_list} \
-  --trainer.max_train_steps 100000 \
-  --trainer.save_interval 2000 \
-  --run_root_dir ${run_root_dir} \
-  --run_id ${run_id} \
-  --is_debug False \
-  2>&1 | tee ${output_dir}/train_$(date +%Y%m%d_%H%M%S).log
-
-
-
-##### Multi-Server Multi-GPU training script #####
-# /mnt/volumes/base-3da-ali-sh-mix/xswang/miniconda3/envs/starvla/bin/accelerate launch \
-#   --config_file /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/starVLA/config/deepseeds/deepspeed_zero2.yaml \
-#   --num_processes 16 \
-#   --num_machines ${NODE_NUM} \
-#   --machine_rank ${RANK} \
-#   --main_process_ip ${MASTER_ADDR} \
-#   --main_process_port ${MASTER_PORT} \
-#   /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/starVLA/training/train_starvla.py \
-#   --config_yaml /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${config_yaml} \
+# accelerate launch \
+#   --config_file starVLA/config/deepseeds/deepspeed_zero2.yaml \
+#   --num_processes 8 \
+#   starVLA/training/train_starvla.py \
+#   --config_yaml ${config_yaml} \
 #   --framework.name ${Framework_name} \
 #   --framework.qwenvl.base_vlm ${base_vlm} \
-#   --datasets.vla_data.data_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${data_root}\
+#   --datasets.vla_data.data_root_dir ${data_root}\
 #   --datasets.vla_data.data_mix ${data_mix} \
-#   --datasets.vla_data.per_device_batch_size 16 \
+#   --datasets.vla_data.per_device_batch_size 32 \
 #   --datasets.vla_data.num_workers 32 \
+#   --datasets.vla_data.balance_dataset_weights true \
 #   --trainer.max_train_steps 100000 \
 #   --trainer.save_interval 2000 \
-#   --run_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${run_root_dir} \
+#   --run_root_dir ${run_root_dir} \
 #   --run_id ${run_id} \
-#   --is_debug False
+#   --is_debug False \
+#   2>&1 | tee ${output_dir}/train_$(date +%Y%m%d_%H%M%S).log
+
+
+
 #### Multi-Server Multi-GPU training script #####
+/mnt/volumes/base-3da-ali-sh-mix/xswang/miniconda3/envs/starvla/bin/accelerate launch \
+  --config_file /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/starVLA/config/deepseeds/deepspeed_zero2.yaml \
+  --num_processes 16 \
+  --num_machines ${NODE_NUM} \
+  --machine_rank ${RANK} \
+  --main_process_ip ${MASTER_ADDR} \
+  --main_process_port ${MASTER_PORT} \
+  /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/starVLA/training/train_starvla.py \
+  --config_yaml /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${config_yaml} \
+  --framework.name ${Framework_name} \
+  --framework.qwenvl.base_vlm ${base_vlm} \
+  --datasets.vla_data.data_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${data_root}\
+  --datasets.vla_data.data_mix ${data_mix} \
+  --datasets.vla_data.per_device_batch_size 16 \
+  --datasets.vla_data.num_workers 32 \
+  --datasets.vla_data.balance_dataset_weights true \
+  --trainer.max_train_steps 100000 \
+  --trainer.save_interval 2000 \
+  --run_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${run_root_dir} \
+  --run_id ${run_id} \
+  --is_debug False
+### Multi-Server Multi-GPU training script #####

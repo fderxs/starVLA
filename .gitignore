@@ -224,3 +224,4 @@ examples/MultiRobot/*
 
 AGENTS.md
 examples/tools/run_test_dataloader.sh
+*.sh
