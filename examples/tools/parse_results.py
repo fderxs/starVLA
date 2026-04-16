@@ -159,6 +159,54 @@ def extract_google_robot_success_rate(log_file):
         return None
 
 
+def extract_google_robot_all_runs(task_dir):
+    """Extract success rates from all eval*.log files in a Google Robot task directory
+
+    Returns a dict with:
+    - 'rates': list of success rates from all runs
+    - 'mean': mean success rate
+    - 'max': maximum success rate
+    - 'min': minimum success rate
+    - 'count': number of runs
+    - 'file_rates': dict mapping file index to success rate
+    """
+    if not task_dir.exists():
+        return None
+
+    success_rates = []
+    file_rates = {}  # Map file index to rate
+
+    # Look for eval.log, eval_1.log, eval_2.log, etc.
+    for log_file in sorted(task_dir.glob("eval*.log")):
+        rate = extract_google_robot_success_rate(log_file)
+        if rate is not None:
+            success_rates.append(rate)
+            # Extract file index (eval.log -> 0, eval_1.log -> 1, etc.)
+            name = log_file.stem  # e.g., "eval" or "eval_1"
+            if name == "eval":
+                file_idx = 0
+            else:
+                # Extract number from eval_N
+                match = re.search(r'eval_(\d+)', name)
+                if match:
+                    file_idx = int(match.group(1))
+                else:
+                    file_idx = len(file_rates)
+            file_rates[file_idx] = rate
+
+    if not success_rates:
+        return None
+
+    return {
+        'rates': success_rates,
+        'mean': sum(success_rates) / len(success_rates),
+        'max': max(success_rates),
+        'min': min(success_rates),
+        'count': len(success_rates),
+        'file_rates': file_rates
+    }
+
+
 def shorten_google_robot_task_name(task_name):
     """Shorten Google Robot task name for display"""
     abbreviations = {
@@ -525,8 +573,8 @@ def parse_calvin_results(base_dir, model_name):
     print("=" * total_width)
 
 
-def parse_google_robot_results(base_dir, model_name):
-    """Parse Google Robot results"""
+def parse_google_robot_results(base_dir, model_name, show_all_runs=False):
+    """Parse Google Robot results with support for multiple runs"""
     # Google Robot tasks grouped by type
     va_tasks = [
         'drawer_variant_agg',
@@ -555,8 +603,10 @@ def parse_google_robot_results(base_dir, model_name):
         if checkpoint_dir.is_dir() and checkpoint_dir.name.startswith("steps_"):
             checkpoint_steps.add(checkpoint_dir.name)
             for task in all_tasks:
-                log_file = checkpoint_dir / task / "eval.log"
-                results[checkpoint_dir.name][task] = extract_google_robot_success_rate(log_file)
+                task_dir = checkpoint_dir / task
+                # Try to get all runs
+                all_runs = extract_google_robot_all_runs(task_dir)
+                results[checkpoint_dir.name][task] = all_runs
 
     if not checkpoint_steps:
         print(f"Warning: No checkpoints found for model: {model_name}")
@@ -565,8 +615,8 @@ def parse_google_robot_results(base_dir, model_name):
     sorted_checkpoints = sorted(checkpoint_steps, key=lambda x: int(re.search(r'steps_(\d+)', x).group(1)))
 
     # Column widths
-    col_width = 12
-    avg_width = 10
+    col_width = 13
+    avg_width = 11
     total_width = 15 + col_width * 8 + avg_width * 3
 
     print("=" * total_width)
@@ -584,49 +634,69 @@ def parse_google_robot_results(base_dir, model_name):
         header += f"{task_display:^{col_width}s}"
     header += f"{'VM-Avg':^{avg_width}s}"
     header += f"{'VA-Avg':^{avg_width}s}"
+    header += f"{'Overall':^{avg_width}s}"
     print(header)
     print("-" * total_width)
 
-    # Print results for each checkpoint
+    # Print results for each checkpoint (Mean values only)
     for checkpoint in sorted_checkpoints:
         step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
         row = f"steps_{step_num:<9s}"
 
-        va_results = []
-        vm_results = []
+        va_means = []
+        vm_means = []
 
         # VM tasks
         for task in vm_tasks:
-            success_rate = results[checkpoint].get(task)
-            if success_rate is not None:
-                cell = f"{success_rate*100:4.1f}%"
+            task_data = results[checkpoint].get(task)
+            if task_data:
+                mean_rate = task_data['mean']
+                count = task_data['count']
+                if count > 1:
+                    cell = f"{mean_rate*100:4.1f}%[{count}]"
+                else:
+                    cell = f"{mean_rate*100:5.1f}%"
                 row += f"{cell:^{col_width}s}"
-                vm_results.append(success_rate)
+                vm_means.append(mean_rate)
             else:
                 row += f"{'N/A':^{col_width}s}"
 
         # VA tasks
         for task in va_tasks:
-            success_rate = results[checkpoint].get(task)
-            if success_rate is not None:
-                cell = f"{success_rate*100:4.1f}%"
+            task_data = results[checkpoint].get(task)
+            if task_data:
+                mean_rate = task_data['mean']
+                count = task_data['count']
+                if count > 1:
+                    cell = f"{mean_rate*100:4.1f}%[{count}]"
+                else:
+                    cell = f"{mean_rate*100:5.1f}%"
                 row += f"{cell:^{col_width}s}"
-                va_results.append(success_rate)
+                va_means.append(mean_rate)
             else:
-                row += f"{'N/A':^{col_width}s}"        
+                row += f"{'N/A':^{col_width}s}"
 
         # VM average
-        if vm_results:
-            vm_avg = sum(vm_results) / len(vm_results)
-            cell = f"{vm_avg*100:4.1f}%"
+        if vm_means:
+            vm_avg = sum(vm_means) / len(vm_means)
+            cell = f"{vm_avg*100:5.1f}%"
             row += f"{cell:^{avg_width}s}"
         else:
             row += f"{'N/A':^{avg_width}s}"
 
         # VA average
-        if va_results:
-            va_avg = sum(va_results) / len(va_results)
-            cell = f"{va_avg*100:4.1f}%"
+        if va_means:
+            va_avg = sum(va_means) / len(va_means)
+            cell = f"{va_avg*100:5.1f}%"
+            row += f"{cell:^{avg_width}s}"
+        else:
+            row += f"{'N/A':^{avg_width}s}"
+
+        # Overall average
+        all_means = vm_means + va_means
+        if all_means:
+            overall_avg = sum(all_means) / len(all_means)
+            cell = f"{overall_avg*100:5.1f}%"
             row += f"{cell:^{avg_width}s}"
         else:
             row += f"{'N/A':^{avg_width}s}"
@@ -634,6 +704,178 @@ def parse_google_robot_results(base_dir, model_name):
         print(row)
 
     print("=" * total_width)
+
+    # Show detailed results for all runs if requested
+    if show_all_runs:
+        print("\n")
+        print("=" * total_width)
+        print("Detailed Results for All Runs (Multiple Runs Only)")
+        print("=" * total_width)
+
+        has_detailed_output = False
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+
+            # Check if this checkpoint has multiple runs
+            has_multiple_runs = any(
+                results[checkpoint].get(task) is not None and
+                results[checkpoint].get(task)['count'] > 1
+                for task in all_tasks
+            )
+
+            if not has_multiple_runs:
+                continue
+
+            has_detailed_output = True
+            print(f"\nCheckpoint: steps_{step_num}")
+            print("-" * total_width)
+
+            # Find all file indices
+            all_file_indices = set()
+            for task in all_tasks:
+                task_data = results[checkpoint].get(task)
+                if task_data and task_data['count'] > 1:
+                    all_file_indices.update(task_data['file_rates'].keys())
+
+            sorted_file_indices = sorted(all_file_indices)
+
+            if not sorted_file_indices:
+                continue
+
+            # Print header
+            header = f"{'Eval':<15s}"
+            for task in vm_tasks:
+                task_display = shorten_google_robot_task_name(task)
+                header += f"{task_display:^{col_width}s}"
+            for task in va_tasks:
+                task_display = shorten_google_robot_task_name(task)
+                header += f"{task_display:^{col_width}s}"
+            header += f"{'VM-Avg':^{avg_width}s}"
+            header += f"{'VA-Avg':^{avg_width}s}"
+            header += f"{'Overall':^{avg_width}s}"
+            print(header)
+            print("-" * total_width)
+
+            # Print each eval file
+            for file_idx in sorted_file_indices:
+                if file_idx == 0:
+                    eval_name = "eval.log"
+                else:
+                    eval_name = f"eval_{file_idx}.log"
+                row = f"{eval_name:<15s}"
+
+                vm_rates = []
+                va_rates = []
+
+                # VM tasks
+                for task in vm_tasks:
+                    task_data = results[checkpoint].get(task)
+                    if task_data and file_idx in task_data['file_rates']:
+                        rate = task_data['file_rates'][file_idx]
+                        cell = f"{rate*100:5.1f}%"
+                        row += f"{cell:^{col_width}s}"
+                        vm_rates.append(rate)
+                    else:
+                        row += f"{'-':^{col_width}s}"
+
+                # VA tasks
+                for task in va_tasks:
+                    task_data = results[checkpoint].get(task)
+                    if task_data and file_idx in task_data['file_rates']:
+                        rate = task_data['file_rates'][file_idx]
+                        cell = f"{rate*100:5.1f}%"
+                        row += f"{cell:^{col_width}s}"
+                        va_rates.append(rate)
+                    else:
+                        row += f"{'-':^{col_width}s}"
+
+                # VM average for this eval
+                if vm_rates:
+                    vm_avg = sum(vm_rates) / len(vm_rates)
+                    cell = f"{vm_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                # VA average for this eval
+                if va_rates:
+                    va_avg = sum(va_rates) / len(va_rates)
+                    cell = f"{va_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                # Overall average for this eval
+                all_rates = vm_rates + va_rates
+                if all_rates:
+                    overall_avg = sum(all_rates) / len(all_rates)
+                    cell = f"{overall_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                print(row)
+
+            # Print Mean, Max, Min rows
+            for metric_name in ['Mean', 'Max', 'Min']:
+                row = f"{metric_name:<15s}"
+
+                vm_metrics = []
+                va_metrics = []
+
+                # VM tasks
+                for task in vm_tasks:
+                    task_data = results[checkpoint].get(task)
+                    if task_data and task_data['count'] > 1:
+                        metric_val = task_data[metric_name.lower()]
+                        cell = f"{metric_val*100:5.1f}%"
+                        row += f"{cell:^{col_width}s}"
+                        vm_metrics.append(metric_val)
+                    else:
+                        row += f"{'-':^{col_width}s}"
+
+                # VA tasks
+                for task in va_tasks:
+                    task_data = results[checkpoint].get(task)
+                    if task_data and task_data['count'] > 1:
+                        metric_val = task_data[metric_name.lower()]
+                        cell = f"{metric_val*100:5.1f}%"
+                        row += f"{cell:^{col_width}s}"
+                        va_metrics.append(metric_val)
+                    else:
+                        row += f"{'-':^{col_width}s}"
+
+                # VM average
+                if vm_metrics:
+                    vm_avg = sum(vm_metrics) / len(vm_metrics)
+                    cell = f"{vm_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                # VA average
+                if va_metrics:
+                    va_avg = sum(va_metrics) / len(va_metrics)
+                    cell = f"{va_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                # Overall average
+                all_metrics = vm_metrics + va_metrics
+                if all_metrics:
+                    overall_avg = sum(all_metrics) / len(all_metrics)
+                    cell = f"{overall_avg*100:5.1f}%"
+                    row += f"{cell:^{avg_width}s}"
+                else:
+                    row += f"{'-':^{avg_width}s}"
+
+                print(row)
+
+        if not has_detailed_output:
+            print("No checkpoints with multiple runs found.")
+
+        print("=" * total_width)
 
 
 def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
@@ -727,42 +969,105 @@ def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
 
     # Show detailed task results if requested
     if show_all_runs:
-        print("\n")
-        print("=" * total_width)
-        print("Detailed Task Results")
-        print("=" * total_width)
+        # Collect all unique task names for clean and randomized
+        all_clean_tasks = set()
+        all_randomized_tasks = set()
 
         for checkpoint in sorted_checkpoints:
-            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
             clean_tasks = results[checkpoint]['clean']
             randomized_tasks = results[checkpoint]['randomized']
+            all_clean_tasks.update(clean_tasks.keys())
+            all_randomized_tasks.update(randomized_tasks.keys())
 
-            if not clean_tasks and not randomized_tasks:
-                continue
+        all_clean_tasks = sorted(all_clean_tasks)
+        all_randomized_tasks = sorted(all_randomized_tasks)
 
-            print(f"\n{'='*total_width}")
-            print(f"Checkpoint: steps_{step_num}")
-            print(f"{'='*total_width}")
+        if not all_clean_tasks and not all_randomized_tasks:
+            print("\nNo tasks found for detailed display.")
+            return
 
-            # Show Clean tasks
-            if clean_tasks:
-                print(f"\nClean Tasks ({len(clean_tasks)} tasks):")
-                print(f"{'-'*total_width}")
-                # Sort tasks by name
-                sorted_clean = sorted(clean_tasks.items())
-                for i, (task_name, success_rate) in enumerate(sorted_clean, 1):
-                    print(f"{i:2d}. {task_name:30s} {success_rate*100:5.1f}%")
+        print("\n")
 
-            # Show Randomized tasks
-            if randomized_tasks:
-                print(f"\nRandomized Tasks ({len(randomized_tasks)} tasks):")
-                print(f"{'-'*total_width}")
-                # Sort tasks by name
-                sorted_randomized = sorted(randomized_tasks.items())
-                for i, (task_name, success_rate) in enumerate(sorted_randomized, 1):
-                    print(f"{i:2d}. {task_name:30s} {success_rate*100:5.1f}%")
+        # Display Clean tasks table
+        if all_clean_tasks:
+            task_col_width = 10
+            total_clean_width = 15 + task_col_width * len(all_clean_tasks)
 
-        print(f"\n{'='*total_width}")
+            print("=" * total_clean_width)
+            print("Clean Tasks - All Checkpoints")
+            print("=" * total_clean_width)
+            print()
+
+            # Header
+            header = f"{'Checkpoint':<15s}"
+            for idx, task in enumerate(all_clean_tasks):
+                # Shorten task name to fit
+                # task_short = task[:9] if len(task) > 9 else task
+                header += f"{str(idx):^{task_col_width}s}"
+            print(header)
+            print("-" * total_clean_width)
+
+            # Each checkpoint row
+            for checkpoint in sorted_checkpoints:
+                clean_tasks = results[checkpoint]['clean']
+                if not clean_tasks:
+                    continue
+
+                step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+                row = f"steps_{step_num:<9s}"
+
+                for task in all_clean_tasks:
+                    if task in clean_tasks:
+                        rate = clean_tasks[task]
+                        cell = f"{rate*100:5.1f}%"
+                        row += f"{cell:^{task_col_width}s}"
+                    else:
+                        row += f"{'-':^{task_col_width}s}"
+
+                print(row)
+
+            print("=" * total_clean_width)
+
+        # Display Randomized tasks table
+        if all_randomized_tasks:
+            task_col_width = 10
+            total_rand_width = 15 + task_col_width * len(all_randomized_tasks)
+
+            print("\n")
+            print("=" * total_rand_width)
+            print("Randomized Tasks - All Checkpoints")
+            print("=" * total_rand_width)
+            print()
+
+            # Header
+            header = f"{'Checkpoint':<15s}"
+            for idx, task in enumerate(all_randomized_tasks):
+                # Shorten task name to fit
+                # task_short = task[:9] if len(task) > 9 else task
+                header += f"{str(idx):^{task_col_width}s}"
+            print(header)
+            print("-" * total_rand_width)
+
+            # Each checkpoint row
+            for checkpoint in sorted_checkpoints:
+                randomized_tasks = results[checkpoint]['randomized']
+                if not randomized_tasks:
+                    continue
+
+                step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+                row = f"steps_{step_num:<9s}"
+
+                for task in all_randomized_tasks:
+                    if task in randomized_tasks:
+                        rate = randomized_tasks[task]
+                        cell = f"{rate*100:5.1f}%"
+                        row += f"{cell:^{task_col_width}s}"
+                    else:
+                        row += f"{'-':^{task_col_width}s}"
+
+                print(row)
+
+            print("=" * total_rand_width)
 
 
 def main():
@@ -786,8 +1091,14 @@ Examples:
   # Parse Google Robot results
   python parse_results.py -b google_robot -m bridge_rt_1_qwen3gr00t
 
+  # Parse Google Robot results with all runs displayed
+  python parse_results.py -b google_robot -m bridge_rt_1_qwen3gr00t --show_all_runs
+
   # Parse Robotwin results
   python parse_results.py -b robotwin -m robotwin_all_50_qwen3OFT_all
+
+  # Parse Robotwin results with all runs displayed
+  python parse_results.py -b robotwin -m robotwin_all_50_qwen3OFT_all --show_all_runs
 
   # Parse multiple models
   python parse_results.py -b libero -m model1 model2 model3
@@ -800,8 +1111,8 @@ Examples:
                         help='Model name(s) to parse results for. Can specify multiple models.')
     parser.add_argument('--log_dir', type=str, default='logs',
                         help='Log directory path (default: logs)')
-    parser.add_argument('--show_all_runs', action='store_true',
-                        help='Show detailed results for all runs (WidowX only)')
+    parser.add_argument('-a', '--show_all_runs', action='store_true',
+                        help='Show detailed results for all runs (WidowX, Google Robot, and Robotwin)')
 
     args = parser.parse_args()
 
@@ -817,7 +1128,7 @@ Examples:
         parse_func = parse_calvin_results
     elif args.benchmark == 'google_robot':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'google_robot'
-        parse_func = parse_google_robot_results
+        parse_func = lambda bd, mn: parse_google_robot_results(bd, mn, args.show_all_runs)
     elif args.benchmark == 'robotwin':
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'Robotwin'
         parse_func = lambda bd, mn: parse_robotwin_results(bd, mn, args.show_all_runs)
