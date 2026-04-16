@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple
 
 from typing_extensions import override
 import websockets.sync.client
+import websockets.exceptions
 
 from . import msgpack_numpy
 
@@ -49,8 +50,8 @@ class WebsocketClientPolicy:
                     max_size=None,
                     additional_headers=headers,
                     open_timeout=150,
-                    ping_interval=20,
-                    ping_timeout=20,
+                    ping_interval=120,  # Increased from 20 to 120 seconds to handle long inference times
+                    ping_timeout=120,   # Increased from 20 to 120 seconds to prevent premature connection closure
                 )
                 metadata = msgpack_numpy.unpackb(conn.recv())
                 return conn, metadata
@@ -65,13 +66,56 @@ class WebsocketClientPolicy:
             pass
     
     @override
-    def predict_action(self, query_info: Dict) -> Dict:
-        data = self._packer.pack(query_info)
-        self._ws.send(data)
-        response = self._ws.recv()
-        if isinstance(response, str):
-            raise RuntimeError(f"Error in inference server:\n{response}")
-        return msgpack_numpy.unpackb(response)
+    def predict_action(self, query_info: Dict, max_retries: int = 3) -> Dict:
+        """
+        Predict action with automatic retry on connection failure.
+
+        Args:
+            query_info: Dictionary containing the query information
+            max_retries: Maximum number of retry attempts (default: 3)
+
+        Returns:
+            Dictionary containing the prediction results
+
+        Raises:
+            RuntimeError: If the server returns an error message
+            websockets.exceptions.ConnectionClosed: If all retry attempts fail
+        """
+        for attempt in range(max_retries):
+            try:
+                data = self._packer.pack(query_info)
+                self._ws.send(data)
+                response = self._ws.recv()
+                if isinstance(response, str):
+                    raise RuntimeError(f"Error in inference server:\n{response}")
+                return msgpack_numpy.unpackb(response)
+            except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
+                logging.warning(
+                    f"Connection closed during predict_action (attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                if attempt < max_retries - 1:
+                    # Exponential backoff: wait 1s, 2s, 4s, ...
+                    backoff_time = 2 ** attempt
+                    logging.info(f"Waiting {backoff_time}s before reconnecting...")
+                    time.sleep(backoff_time)
+
+                    logging.info(f"Attempting to reconnect to {self._uri}...")
+                    try:
+                        # Close old connection if it exists
+                        try:
+                            self._ws.close()
+                        except Exception:
+                            pass
+                        # Reconnect to server
+                        self._ws, self._server_metadata = self._wait_for_server()
+                        logging.info(f"Successfully reconnected to {self._uri}")
+                    except Exception as reconnect_error:
+                        logging.error(f"Failed to reconnect: {reconnect_error}")
+                        if attempt == max_retries - 2:
+                            raise
+                else:
+                    logging.error(f"All {max_retries} retry attempts failed")
+                    raise
 
 
 
