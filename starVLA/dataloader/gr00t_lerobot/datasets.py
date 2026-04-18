@@ -2058,7 +2058,7 @@ class LeRobotMixtureDataset(Dataset):
 
         # 1. Dataset lengths
         self._dataset_lengths = np.array([len(dataset) for dataset in self.datasets])
-        print(f"Dataset lengths: {self._dataset_lengths}")
+        # print(f"Dataset lengths: {self._dataset_lengths}")
 
         # 2. Dataset sampling weights
         self._dataset_sampling_weights = np.array(dataset_sampling_weights)
@@ -2081,6 +2081,8 @@ class LeRobotMixtureDataset(Dataset):
             print(f"Fallback to equal weights")
         else:
             self._dataset_sampling_weights /= weights_sum
+
+        self._log_benchmark_mix_summary()
 
         # 3. Trajectory sampling weights
         self._trajectory_sampling_weights: list[np.ndarray] = []
@@ -2169,6 +2171,60 @@ class LeRobotMixtureDataset(Dataset):
             }
             dataset_descriptions.append(dataset_description)
         return json.dumps({"Mixture dataset": dataset_descriptions}, indent=2)
+
+    @staticmethod
+    def _is_main_process() -> bool:
+        return (not dist.is_initialized()) or dist.get_rank() == 0
+
+    @staticmethod
+    def _classify_benchmark(dataset: LeRobotSingleDataset) -> str:
+        dataset_path = str(dataset.dataset_path).lower()
+        dataset_name = dataset.dataset_name.lower()
+        tag = str(getattr(dataset, "tag", "")).lower()
+
+        if "robotwin" in dataset_path or "robotwin" in dataset_name:
+            return "RoboTwin"
+        if "libero" in dataset_path or "libero" in dataset_name:
+            return "LIBERO"
+        if "fractal" in dataset_path or "rt1" in dataset_path or tag == "oxe_rt1":
+            return "Google Robot"
+        if "bridge" in dataset_path or tag == "oxe_bridge":
+            return "WidowX"
+        return "Other"
+
+    def _log_benchmark_mix_summary(self):
+        if not self._is_main_process():
+            return
+
+        total_transitions = int(self.dataset_lengths.sum())
+        summary = defaultdict(lambda: {"datasets": 0, "transitions": 0, "sampling_weight": 0.0, "step_strides": set()})
+        for dataset, length, sampling_weight in zip(self.datasets, self.dataset_lengths, self.dataset_sampling_weights):
+            benchmark = self._classify_benchmark(dataset)
+            summary[benchmark]["datasets"] += 1
+            summary[benchmark]["transitions"] += int(length)
+            summary[benchmark]["sampling_weight"] += float(sampling_weight)
+            step_stride = dataset.data_cfg.get("step_stride", 1) if dataset.data_cfg is not None else 1
+            summary[benchmark]["step_strides"].add(int(step_stride))
+
+        ordered_benchmarks = ["WidowX", "Google Robot", "LIBERO", "RoboTwin"]
+        ordered_benchmarks += sorted(k for k in summary.keys() if k not in ordered_benchmarks)
+
+        print("\n=== Benchmark Training Mixture Summary ===")
+        print(f"balance_dataset_weights={self.balance_dataset_weights}, balance_trajectory_weights={self.balance_trajectory_weights}")
+        print(f"{'Benchmark':<16} {'Datasets':>8} {'Stride(s)':>10} {'Transitions':>14} {'Data %':>10} {'Sampling %':>12}")
+        print("-" * 77)
+        for benchmark in ordered_benchmarks:
+            item = summary.get(benchmark, {"datasets": 0, "transitions": 0, "sampling_weight": 0.0, "step_strides": set()})
+            data_pct = (item["transitions"] / total_transitions * 100.0) if total_transitions else 0.0
+            sampling_pct = item["sampling_weight"] * 100.0
+            step_strides = ",".join(str(stride) for stride in sorted(item["step_strides"])) or "-"
+            print(
+                f"{benchmark:<16} {item['datasets']:>8d} {step_strides:>10} {item['transitions']:>14d} "
+                f"{data_pct:>9.2f}% {sampling_pct:>11.2f}%"
+            )
+        print("-" * 77)
+        print(f"{'Total':<16} {len(self.datasets):>8d} {'-':>10} {total_transitions:>14d} {100.0:>9.2f}% {100.0:>11.2f}%")
+        print("Sampling % is the normalized dataset sampling probability used by LeRobotMixtureDataset.\n")
 
     def set_epoch(self, epoch: int):
         """Set the epoch for the dataset.
