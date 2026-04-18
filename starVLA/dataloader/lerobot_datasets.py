@@ -16,6 +16,32 @@ from starVLA.dataloader.gr00t_lerobot.embodiment_tags import ROBOT_TYPE_TO_EMBOD
 def collate_fn(batch):
     return batch
 
+
+def _copy_data_cfg_for_dataset(data_cfg: dict | None, data_name: str, robot_type: str) -> dict | None:
+    """Return a per-dataset data config with optional step_stride overrides applied."""
+    if data_cfg is None:
+        return None
+
+    dataset_cfg = OmegaConf.create(OmegaConf.to_container(data_cfg, resolve=True))
+    overrides = data_cfg.get("step_stride_overrides", {}) or {}
+    step_stride = None
+
+    by_dataset_name = overrides.get("dataset_name", {}) or {}
+    if data_name in by_dataset_name:
+        step_stride = by_dataset_name[data_name]
+
+    by_robot_type = overrides.get("robot_type", {}) or {}
+    if step_stride is None and robot_type in by_robot_type:
+        step_stride = by_robot_type[robot_type]
+
+    if step_stride is not None:
+        step_stride = int(step_stride)
+        if step_stride <= 0:
+            raise ValueError(f"step_stride must be positive for dataset {data_name}, got {step_stride}")
+        dataset_cfg.step_stride = step_stride
+
+    return dataset_cfg
+
 def make_LeRobotSingleDataset(
     data_root_dir: Path | str,
     data_name: str,
@@ -82,7 +108,8 @@ def get_vla_dataset(
 
     dataset_mixture = []
     for d_name, d_weight, robot_type in filtered_mixture_spec:
-        dataset_mixture.append((make_LeRobotSingleDataset(Path(data_root_dir), d_name, robot_type, delete_pause_frame=delete_pause_frame, data_cfg=data_cfg), d_weight))
+        dataset_cfg = _copy_data_cfg_for_dataset(data_cfg, d_name, robot_type)
+        dataset_mixture.append((make_LeRobotSingleDataset(Path(data_root_dir), d_name, robot_type, delete_pause_frame=delete_pause_frame, data_cfg=dataset_cfg), d_weight))
 
     return LeRobotMixtureDataset(
         dataset_mixture,

@@ -855,6 +855,12 @@ class LeRobotSingleDataset(Dataset):
             return (not dist.is_initialized()) or dist.get_rank() == 0
     
         config_key = self._get_steps_config_key()
+        step_stride = self.data_cfg.get("step_stride", 1) if self.data_cfg is not None else 1
+        legacy_config_dict = {
+            "delete_pause_frame": self.delete_pause_frame,
+            "dataset_name": self.dataset_name,
+        }
+        legacy_config_key = hashlib.md5(str(sorted(legacy_config_dict.items())).encode()).hexdigest()[:12]
         steps_filename = "steps_data_index.pkl"
         steps_path = self.dataset_path / "meta" / steps_filename
     
@@ -863,7 +869,15 @@ class LeRobotSingleDataset(Dataset):
             try:
                 with open(steps_path, "rb") as f:
                     cached_data = pickle.load(f)
-                return cached_data["steps"]
+                if cached_data.get("config_key") == config_key:
+                    return cached_data["steps"]
+                if int(step_stride) == 1 and cached_data.get("config_key") == legacy_config_key:
+                    return cached_data["steps"]
+                if is_main():
+                    print(
+                        f"[RANK {os.environ.get('RANK', 'NA')}] "
+                        f"Cached steps config mismatch for {self.dataset_name}; will rebuild."
+                    )
             except Exception as e:
                 # include EOFError / PickleError / KeyError
                 print(
@@ -882,6 +896,7 @@ class LeRobotSingleDataset(Dataset):
                 "total_steps": len(all_steps),
                 "computed_timestamp": pd.Timestamp.now().isoformat(),
                 "delete_pause_frame": self.delete_pause_frame,
+                "step_stride": step_stride,
             }
     
             steps_path.parent.mkdir(parents=True, exist_ok=True)
