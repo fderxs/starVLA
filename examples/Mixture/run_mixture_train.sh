@@ -27,7 +27,7 @@ freeze_module_list=''
 base_vlm=Qwen/Qwen3-VL-4B-Instruct
 config_yaml=examples/Mixture/starvla_cotrain_mixture.yaml
 data_root=playground/Datasets
-data_mix=bridge_fractal_libero
+data_mix=bridge_fractal_libero_robotwin
 run_root_dir=results/Checkpoints
 run_id=${data_mix}_qwen3gr00t_balance
 # === End of environment variable configuration ===
@@ -49,7 +49,7 @@ cp $0 ${output_dir}/
 #   --config_yaml ${config_yaml} \
 #   --framework.name ${Framework_name} \
 #   --framework.qwenvl.base_vlm ${base_vlm} \
-#   --datasets.vla_data.data_root_dir ${data_root}\
+#   --datasets.vla_data.data_root_dir ${data_root} \
 #   --datasets.vla_data.data_mix ${data_mix} \
 #   --datasets.vla_data.per_device_batch_size 32 \
 #   --datasets.vla_data.num_workers 32 \

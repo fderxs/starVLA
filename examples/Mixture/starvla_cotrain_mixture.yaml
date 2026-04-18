@@ -21,8 +21,8 @@ framework:
     action_hidden_dim: 2048
     add_pos_embed: True
     max_seq_len: 1024
-    action_dim: 7
-    state_dim: 7
+    action_dim: 14
+    state_dim: 14
     future_action_window_size: 15
     action_horizon: 16 # need merge with future_action_window_size 
     past_action_window_size: 0
@@ -63,7 +63,7 @@ datasets:
   vla_data:
     dataset_py: lerobot_datasets
     data_root_dir: playground/Datasets
-    data_mix: libero_all # libero_goal
+    data_mix: bridge_fractal_libero_robotwin
     action_type: delta_mixed
     sequential_step_sampling: False
     CoT_prompt: "Your task is {instruction}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format."
@@ -78,8 +78,10 @@ datasets:
     step_stride_overrides:
       robot_type:
         robotwin: 3
+    target_action_dim: 14
+    target_state_dim: 14
     # Dataset sampling balance parameters
-    balance_dataset_weights: false  # If true, weight sampling probability by dataset size (larger datasets sampled more)
+    balance_dataset_weights: true  # If true, weight sampling probability by dataset size (larger datasets sampled more)
     balance_trajectory_weights: false  # If true, weight trajectory sampling by trajectory length (longer trajectories sampled more)
 
 
