@@ -70,6 +70,22 @@ LE_ROBOT3_TASKS_FILENAME = "meta/tasks.parquet"
 LE_ROBOT3_EPISODE_FILENAME = "meta/episodes/*/*.parquet"
 
 
+def _pad_last_dim(array: np.ndarray, target_dim: int | None, name: str) -> np.ndarray:
+    """Pad modality arrays on the last dimension for mixed-embodiment batches."""
+    if target_dim is None:
+        return array
+
+    current_dim = array.shape[-1]
+    if current_dim == target_dim:
+        return array
+    if current_dim > target_dim:
+        raise ValueError(f"{name} dim {current_dim} exceeds target dim {target_dim}.")
+
+    pad_width = [(0, 0)] * array.ndim
+    pad_width[-1] = (0, target_dim - current_dim)
+    return np.pad(array, pad_width, mode="constant")
+
+
 def calculate_dataset_statistics(parquet_paths: list[Path]) -> dict:
     """Calculate the dataset statistics of all columns for a list of parquet files."""
     # Dataset statistics
@@ -1279,6 +1295,8 @@ class LeRobotSingleDataset(Dataset):
         for action_key in self.modality_keys["action"]:
             action.append(data[action_key])
         action = np.concatenate(action, axis=1).astype(np.float16)
+        target_action_dim = self.data_cfg.get("target_action_dim", None) if self.data_cfg is not None else None
+        action = _pad_last_dim(action, target_action_dim, "action").astype(np.float16)
 
         sample = {
             "action": action,
@@ -1292,6 +1310,8 @@ class LeRobotSingleDataset(Dataset):
             for state_key in self.modality_keys["state"]:
                 state.append(data[state_key])
             state = np.concatenate(state, axis=1).astype(np.float16)
+            target_state_dim = self.data_cfg.get("target_state_dim", None)
+            state = _pad_last_dim(state, target_state_dim, "state").astype(np.float16)
             sample["state"] = state
 
         return sample
