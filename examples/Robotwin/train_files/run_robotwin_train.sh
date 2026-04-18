@@ -22,14 +22,14 @@ export HF_ENDPOINT=https://artifactory-cloud.chehejia.com/artifactory/api/huggin
 export WANDB_MODE=offline
 ###########################################################################################
 # === Please modify the following paths according to your environment ===
-Framework_name=QwenOFT
+Framework_name=QwenGR00T
 freeze_module_list=''
 base_vlm=Qwen/Qwen3-VL-4B-Instruct
-config_yaml=examples/Robotwin/train_files/starvla_cotrain_robotwin_abs.yaml
-robotwin_data_root=playground/Datasets
-data_mix=robotwin_all_50
+config_yaml=examples/Robotwin/train_files/starvla_cotrain_robotwin_gr00t.yaml
+data_root=playground/Datasets
+data_mix=robotwin_all
 run_root_dir=results/Checkpoints
-run_id=${data_mix}_qwen3OFT_all
+run_id=${data_mix}_${Framework_name}
 # === End of environment variable configuration ===
 ###########################################################################################
 
@@ -49,13 +49,12 @@ cp $0 ${output_dir}/
 #   --config_yaml ${config_yaml} \
 #   --framework.name ${Framework_name} \
 #   --framework.qwenvl.base_vlm ${base_vlm} \
-#   --datasets.vla_data.data_root_dir ${robotwin_data_root} \
+#   --datasets.vla_data.data_root_dir ${data_root} \
 #   --datasets.vla_data.data_mix ${data_mix} \
-#   --datasets.vla_data.per_device_batch_size 24 \
+#   --datasets.vla_data.per_device_batch_size 32 \
+#   --datasets.vla_data.num_workers 32 \
 #   --datasets.vla_data.step_stride 3 \
-#   --datasets.vla.data.num_workers 32 \
-#   --trainer.freeze_modules ${freeze_module_list} \
-#   --trainer.max_train_steps 150000 \
+#   --trainer.max_train_steps 100000 \
 #   --trainer.save_interval 2000 \
 #   --run_root_dir ${run_root_dir} \
 #   --run_id ${run_id} \
@@ -76,12 +75,12 @@ cp $0 ${output_dir}/
   --config_yaml /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${config_yaml} \
   --framework.name ${Framework_name} \
   --framework.qwenvl.base_vlm ${base_vlm} \
-  --datasets.vla_data.data_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${robotwin_data_root}\
+  --datasets.vla_data.data_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${data_root}\
   --datasets.vla_data.data_mix ${data_mix} \
-  --datasets.vla_data.per_device_batch_size 12 \
-  --datasets.vla_data.step_stride 3 \
+  --datasets.vla_data.per_device_batch_size 16 \
   --datasets.vla_data.num_workers 32 \
-  --trainer.max_train_steps 150000 \
+  --datasets.vla_data.step_stride 3 \
+  --trainer.max_train_steps 100000 \
   --trainer.save_interval 2000 \
   --run_root_dir /mnt/volumes/base-3da-ali-sh-mix/xswang/object/code/starVLA/${run_root_dir} \
   --run_id ${run_id} \
