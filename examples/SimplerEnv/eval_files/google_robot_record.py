@@ -95,13 +95,14 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--path", type=str, default="results/google_robot/configs_origin+fractal+b16+lr-0.0002+lora-r64+dropout-0.0--image_aug--libero--90000_chkpt")
     args.add_argument("--steps", type=str, default=None)
-    args.add_argument("-s", "--sub", action="store_true")
+    args.add_argument("-s", "--sub", action="store_true", default=False)
+
+    args = args.parse_args()
 
     if args.sub:
         for task, task_info in TASKS_DICT.items():
             task_info["total"] = task_info["sub_total"]
-    
-    args = args.parse_args()
+
     if args.steps is not None:
         args.path = args.path.replace("90000", args.steps)
 

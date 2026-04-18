@@ -17,6 +17,11 @@ elif [ "$benchmark" == "calvin" ]; then
     bmk_file_name="calvin"
 elif [ "$benchmark" == "robotwin" ]; then
     bmk_file_name="Robotwin"
+    type=${7:-"all"}
+    extra_params="$type"
+else
+    echo -e "\033[31mError: Invalid benchmark '$benchmark'. Must be 'widowx', 'google_robot', 'libero', 'calvin' or 'robotwin'\033[0m"
+    exit 1
 fi
 
 for i in $(seq 1 $n); do
