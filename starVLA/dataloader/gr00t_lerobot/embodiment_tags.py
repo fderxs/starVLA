@@ -47,6 +47,16 @@ class EmbodimentTag(Enum):
     Any new embodiment for finetuning.
     """
 
+    ROBOTWIN = "robotwin"
+    """
+    The RoboTwin bimanual robot benchmark.
+    """
+
+    ROBOTWIN50 = "robotwin50"
+    """
+    The RoboTwin bimanual robot benchmark with action horizon of 50.
+    """
+
     FRANKA = 'franka'
     """
     The Franka Emika Panda robot.
@@ -55,6 +65,7 @@ class EmbodimentTag(Enum):
 # Embodiment tag string: to projector index in the Action Expert Module
 EMBODIMENT_TAG_MAPPING = {
     EmbodimentTag.NEW_EMBODIMENT.value: 31,
+    EmbodimentTag.ROBOTWIN.value: 31,
     EmbodimentTag.OXE_DROID.value: 17,
     EmbodimentTag.OXE_BRIDGE.value: 18,
     EmbodimentTag.OXE_RT1.value: 19,
@@ -72,4 +83,6 @@ ROBOT_TYPE_TO_EMBODIMENT_TAG = {
     "demo_sim_franka_delta_joints": EmbodimentTag.FRANKA,
     "custom_robot_config": EmbodimentTag.NEW_EMBODIMENT,
     "fourier_gr1_arms_waist": EmbodimentTag.GR1,
+    "robotwin": EmbodimentTag.ROBOTWIN,
+    "robotwin50": EmbodimentTag.ROBOTWIN,
 }
