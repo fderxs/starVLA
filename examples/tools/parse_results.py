@@ -884,20 +884,48 @@ def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
     results = defaultdict(lambda: {'clean': {}, 'randomized': {}})
     checkpoint_steps = set()
 
+    def load_robotwin_results(eval_dir):
+        """Load robotwin results from an eval directory (clean/ or randomized/).
+
+        Tries in priority order:
+          1. eval_all.log  — all 50 tasks recorded in a single file
+          2. eval_<suite>.log — one file per sub-task (merged into one dict)
+        """
+        if not eval_dir.exists():
+            return {}
+
+        # 1. Single combined log
+        all_log = eval_dir / "eval_all.log"
+        if all_log.exists():
+            return extract_robotwin_success_rates(all_log)
+
+        # 2. Legacy filename
+        legacy_log = eval_dir / "eval.log"
+        if legacy_log.exists():
+            return extract_robotwin_success_rates(legacy_log)
+
+        # 3. Per-task logs: eval_<suite>.log (exclude eval_all.log already handled above)
+        per_task_logs = [
+            f for f in sorted(eval_dir.glob("eval_*.log"))
+            if f.name != "eval_all.log"
+        ]
+        if per_task_logs:
+            merged = {}
+            for log_file in per_task_logs:
+                merged.update(extract_robotwin_success_rates(log_file))
+            return merged
+    
     # Parse all log files
     for checkpoint_dir in sorted(model_dir.iterdir()):
         if checkpoint_dir.is_dir() and checkpoint_dir.name.startswith("steps_"):
             checkpoint_steps.add(checkpoint_dir.name)
 
-            # Parse clean results
-            clean_log = checkpoint_dir / "clean" / "eval.log"
-            clean_results = extract_robotwin_success_rates(clean_log)
-            results[checkpoint_dir.name]['clean'] = clean_results
-
-            # Parse randomized results
-            randomized_log = checkpoint_dir / "randomized" / "eval.log"
-            randomized_results = extract_robotwin_success_rates(randomized_log)
-            results[checkpoint_dir.name]['randomized'] = randomized_results
+            results[checkpoint_dir.name]['clean'] = load_robotwin_results(
+                checkpoint_dir / "clean"
+            )
+            results[checkpoint_dir.name]['randomized'] = load_robotwin_results(
+                checkpoint_dir / "randomized"
+            )
 
     if not checkpoint_steps:
         print(f"Warning: No checkpoints found for model: {model_name}")
