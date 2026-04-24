@@ -9,6 +9,81 @@ conda activate robotwin
 your_ckpt=$1
 gpu_id=$2 # default is 0
 type=${3:-"all"}
+suites=${4:-"all"}
+
+ALL_TASK_NAMES=(
+    adjust_bottle
+    beat_block_hammer
+    blocks_ranking_rgb
+    blocks_ranking_size
+    click_alarmclock
+    click_bell
+    dump_bin_bigbin
+    grab_roller
+    handover_block
+    handover_mic
+    hanging_mug
+    lift_pot
+    move_can_pot
+    move_pillbottle_pad
+    move_playingcard_away
+    move_stapler_pad
+    open_laptop
+    open_microwave
+    pick_diverse_bottles
+    pick_dual_bottles
+    place_a2b_left
+    place_a2b_right
+    place_bread_basket
+    place_bread_skillet
+    place_burger_fries
+    place_can_basket
+    place_cans_plasticbox
+    place_container_plate
+    place_dual_shoes
+    place_empty_cup
+    place_fan
+    place_mouse_pad
+    place_object_basket
+    place_object_scale
+    place_object_stand
+    place_phone_stand
+    place_shoe
+    press_stapler
+    put_bottles_dustbin
+    put_object_cabinet
+    rotate_qrcode
+    scan_object
+    shake_bottle_horizontally
+    shake_bottle
+    stack_blocks_three
+    stack_blocks_two
+    stack_bowls_three
+    stack_bowls_two
+    stamp_seal
+    turn_switch
+)
+
+task_name_args=()
+eval_log_name="eval_all.log"
+
+if [ "$suites" != "all" ]; then
+    is_valid_suite=false
+    for candidate_suite in "${ALL_TASK_NAMES[@]}"; do
+        if [ "$suites" = "$candidate_suite" ]; then
+            is_valid_suite=true
+            break
+        fi
+    done
+
+    if [ "$is_valid_suite" = false ]; then
+        echo -e "\033[31mError: Invalid suites '$suites'. Must be 'all' or one of: ${ALL_TASK_NAMES[*]}\033[0m"
+        exit 1
+    fi
+
+    task_name_args=(--task_name "$suites")
+    eval_log_name="eval_${suites}.log"
+fi
 
 export CUDA_VISIBLE_DEVICES=${gpu_id}
 export CUDA_LAUNCH_BLOCKING=1
@@ -54,7 +129,8 @@ if [ "$type" = "all" ]; then
         --port 569${gpu_id} \
         --policy_ckpt_path ${your_ckpt} \
         --task_config demo_clean \
-        2>&1 | tee "${LOG_DIR}/clean/eval.log"
+        "${task_name_args[@]}" \
+        2>&1 | tee "${LOG_DIR}/clean/${eval_log_name}"
 
     # randomized
     PYTHONWARNINGS=ignore::UserWarning torchrun --nproc_per_node=1 --master_port 2591$gpu_id \
@@ -64,7 +140,8 @@ if [ "$type" = "all" ]; then
         --port 569${gpu_id} \
         --policy_ckpt_path ${your_ckpt} \
         --task_config demo_randomized \
-        2>&1 | tee "${LOG_DIR}/randomized/eval.log"
+        "${task_name_args[@]}" \
+        2>&1 | tee "${LOG_DIR}/randomized/${eval_log_name}"
 
 elif [ "$type" = "clean" ] || [ "$type" = "randomized" ]; then
     echo -e "\033[33mRunning $type evaluation\033[0m"
@@ -77,7 +154,8 @@ elif [ "$type" = "clean" ] || [ "$type" = "randomized" ]; then
         --port 569${gpu_id} \
         --policy_ckpt_path ${your_ckpt} \
         --task_config demo_$type \
-        2>&1 | tee "${LOG_DIR}/$type/eval.log"
+        "${task_name_args[@]}" \
+        2>&1 | tee "${LOG_DIR}/$type/${eval_log_name}"
 
 else
     echo -e "\033[31mError: Invalid type '$type'. Must be 'all', 'clean', or 'randomized'\033[0m"

@@ -5,12 +5,13 @@ gap=${4:-0}
 gpu_start_id=${5:-0}
 n=${6:-8}
 
-extra_params=""
+extra_params=()
 if [ "$benchmark" == "widowx" ] || [ "$benchmark" == "google_robot" ]; then
     bmk_file_name="SimplerEnv"
     test_num=${7:-5}
     start_run_id=${8:-1}
-    extra_params="$test_num $start_run_id"
+    suites=${9:-"all"}
+    extra_params=("$test_num" "$start_run_id" "$suites")
 elif [ "$benchmark" == "libero" ]; then
     bmk_file_name="LIBERO"
 elif [ "$benchmark" == "calvin" ]; then
@@ -18,7 +19,8 @@ elif [ "$benchmark" == "calvin" ]; then
 elif [ "$benchmark" == "robotwin" ]; then
     bmk_file_name="Robotwin"
     type=${7:-"all"}
-    extra_params="$type"
+    suites=${8:-"all"}
+    extra_params=("$type" "$suites")
 else
     echo -e "\033[31mError: Invalid benchmark '$benchmark'. Must be 'widowx', 'google_robot', 'libero', 'calvin' or 'robotwin'\033[0m"
     exit 1
@@ -35,7 +37,7 @@ for i in $(seq 1 $n); do
     sleep 0
 
     echo "Checkpoint $ckpt founded, running client $i on GPU $gpu_id, testing on $benchmark ..."
-    bash examples/${bmk_file_name}/eval_files/run_eval_${benchmark}.sh $ckpt $gpu_id $extra_params > /dev/null 2>&1 &
+    bash examples/${bmk_file_name}/eval_files/run_eval_${benchmark}.sh "$ckpt" "$gpu_id" "${extra_params[@]}" > /dev/null 2>&1 &
 done
 
 echo "Finished running clients"

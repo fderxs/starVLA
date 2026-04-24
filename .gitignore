@@ -224,4 +224,11 @@ examples/MultiRobot/*
 
 AGENTS.md
 examples/tools/run_test_dataloader.sh
-*.sh
+kill_all_eval.sh
+lizrun.sh
+remove_images_folders.sh
+*.md
+tmp/
+.labtasker
+examples/tools/labtasker/ls_tasks.sh
+examples/tools/labtasker/multi_submit.sh
