@@ -232,3 +232,4 @@ tmp/
 .labtasker
 examples/tools/labtasker/ls_tasks.sh
 examples/tools/labtasker/multi_submit.sh
+*.csv

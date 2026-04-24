@@ -4,9 +4,68 @@ Parse evaluation results from log files for LIBERO, WidowX, and CALVIN benchmark
 """
 import os
 import re
+import csv
 import argparse
 from pathlib import Path
 from collections import defaultdict
+
+
+class ResultsWriter:
+    """Collects structured table data and writes it to CSV or XLSX for Excel use."""
+
+    def __init__(self, output_path):
+        self.output_path = Path(output_path)
+        self.fmt = self.output_path.suffix.lower().lstrip('.')
+        self.tables = []  # list of dicts: {name, headers, rows}
+
+    def add_table(self, name, headers, rows):
+        """Register a table. rows is a list of lists of raw values (not pre-formatted strings)."""
+        self.tables.append({'name': name, 'headers': headers, 'rows': rows})
+
+    def save(self):
+        if not self.tables:
+            return
+        if self.fmt == 'xlsx':
+            self._save_xlsx()
+        else:
+            self._save_csv()
+        print(f"\nResults exported to: {self.output_path}")
+
+    def _save_csv(self):
+        with open(self.output_path, 'w', newline='', encoding='utf-8-sig') as f:
+            w = csv.writer(f)
+            for i, tbl in enumerate(self.tables):
+                if i > 0:
+                    w.writerow([])
+                w.writerow([tbl['name']])
+                w.writerow(tbl['headers'])
+                for row in tbl['rows']:
+                    w.writerow(row)
+
+    def _save_xlsx(self):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font
+        except ImportError:
+            print("Warning: openpyxl not installed. Falling back to CSV.")
+            self.output_path = self.output_path.with_suffix('.csv')
+            self.fmt = 'csv'
+            self._save_csv()
+            return
+
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+        for tbl in self.tables:
+            ws = wb.create_sheet(title=tbl['name'][:31])
+            ws.append(tbl['headers'])
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+            for row in tbl['rows']:
+                ws.append(row)
+            for col in ws.columns:
+                max_len = max((len(str(c.value or '')) for c in col), default=8)
+                ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 30)
+        wb.save(self.output_path)
 
 
 def extract_libero_success_rate(log_file):
@@ -276,7 +335,7 @@ def extract_robotwin_success_rates(log_file):
 
 
 
-def parse_libero_results(base_dir, model_name):
+def parse_libero_results(base_dir, model_name, writer=None):
     """Parse LIBERO results"""
     tasks = ["libero_10", "libero_spatial", "libero_goal", "libero_object"]
     results = defaultdict(dict)
@@ -336,8 +395,26 @@ def parse_libero_results(base_dir, model_name):
 
     print("=" * total_width)
 
+    if writer is not None:
+        tbl_headers = ['Checkpoint'] + [t.replace('libero_', 'LIBERO-').upper() for t in tasks] + ['Average']
+        data_rows = []
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            row_data = [f'steps_{step_num}']
+            valid_results = []
+            for task in tasks:
+                r = results[checkpoint].get(task)
+                if r is not None:
+                    row_data.append(round(r * 100, 1))
+                    valid_results.append(r)
+                else:
+                    row_data.append('N/A')
+            row_data.append(round(sum(valid_results) / len(valid_results) * 100, 1) if valid_results else 'N/A')
+            data_rows.append(row_data)
+        writer.add_table(f'LIBERO - {model_name}', tbl_headers, data_rows)
 
-def parse_widowx_results(base_dir, model_name, show_all_runs=False):
+
+def parse_widowx_results(base_dir, model_name, show_all_runs=False, writer=None):
     """Parse WidowX results"""
     model_dir = base_dir / model_name
     if not model_dir.exists():
@@ -522,7 +599,53 @@ def parse_widowx_results(base_dir, model_name, show_all_runs=False):
 
         print("=" * total_width)
 
-def parse_calvin_results(base_dir, model_name):
+    if writer is not None:
+        # Summary table: one row per checkpoint, mean rate per task
+        tbl_headers = ['Checkpoint'] + [shorten_widowx_task_name(t) for t in all_tasks] + ['Average']
+        data_rows = []
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            row_data = [f'steps_{step_num}']
+            valid_means = []
+            for task in all_tasks:
+                tr = results[checkpoint].get(task)
+                if tr is not None:
+                    row_data.append(round(tr['mean'] * 100, 1))
+                    valid_means.append(tr['mean'])
+                else:
+                    row_data.append('N/A')
+            row_data.append(round(sum(valid_means) / len(valid_means) * 100, 1) if valid_means else 'N/A')
+            data_rows.append(row_data)
+        writer.add_table(f'WidowX - {model_name}', tbl_headers, data_rows)
+
+        # Detailed runs table (all individual runs, one row each)
+        if show_all_runs:
+            detail_headers = ['Checkpoint', 'Run'] + [shorten_widowx_task_name(t) for t in all_tasks] + ['Average']
+            detail_rows = []
+            for checkpoint in sorted_checkpoints:
+                step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+                max_runs = max(
+                    (results[checkpoint][task]['count'] for task in all_tasks if results[checkpoint].get(task)),
+                    default=0,
+                )
+                for run_idx in range(max_runs):
+                    row_data = [f'steps_{step_num}', run_idx + 1]
+                    valid_rates = []
+                    for task in all_tasks:
+                        tr = results[checkpoint].get(task)
+                        if tr is not None and (run_idx + 1) in tr['idxs']:
+                            rate = tr['rates'][tr['idxs'].index(run_idx + 1)]
+                            row_data.append(round(rate * 100, 1))
+                            valid_rates.append(rate)
+                        else:
+                            row_data.append('N/A')
+                    row_data.append(round(sum(valid_rates) / len(valid_rates) * 100, 1) if valid_rates else 'N/A')
+                    detail_rows.append(row_data)
+            if detail_rows:
+                writer.add_table(f'WidowX Runs - {model_name}', detail_headers, detail_rows)
+
+
+def parse_calvin_results(base_dir, model_name, writer=None):
     """Parse CALVIN results"""
     if model_name is None: 
         model_name = "Simplicissimus-S__StarVLA-QwenGR00T_Qwen2_5-VL-3B-Instruct-Action_calvin_D_D"
@@ -584,8 +707,26 @@ def parse_calvin_results(base_dir, model_name):
 
     print("=" * total_width)
 
+    if writer is not None:
+        tbl_headers = ['Checkpoint', 'SR-1', 'SR-2', 'SR-3', 'SR-4', 'SR-5', 'Avg.Len']
+        data_rows = []
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            cr = results[checkpoint]
+            row_data = [f'steps_{step_num}']
+            if cr is None:
+                row_data += ['N/A'] * 6
+            else:
+                for m in ['1', '2', '3', '4', '5']:
+                    v = cr.get(m)
+                    row_data.append(round(v * 100, 1) if v is not None else 'N/A')
+                v = cr.get('avg_len')
+                row_data.append(round(v, 3) if v is not None else 'N/A')
+            data_rows.append(row_data)
+        writer.add_table(f'CALVIN - {model_name}', tbl_headers, data_rows)
 
-def parse_google_robot_results(base_dir, model_name, show_all_runs=False):
+
+def parse_google_robot_results(base_dir, model_name, show_all_runs=False, writer=None):
     """Parse Google Robot results with support for multiple runs"""
     # Google Robot tasks grouped by type
     va_tasks = [
@@ -873,8 +1014,62 @@ def parse_google_robot_results(base_dir, model_name, show_all_runs=False):
 
         print("=" * total_width)
 
+    if writer is not None:
+        task_display_names = [shorten_google_robot_task_name(t) for t in ordered_tasks]
+        # Summary table
+        tbl_headers = ['Checkpoint'] + task_display_names + ['VM-Avg', 'VA-Avg', 'Overall']
+        data_rows = []
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            row_data = [f'steps_{step_num}']
+            va_means, vm_means = [], []
+            for task in ordered_tasks:
+                td = results[checkpoint].get(task)
+                if td:
+                    row_data.append(round(td['mean'] * 100, 1))
+                    (vm_means if task in vm_tasks else va_means).append(td['mean'])
+                else:
+                    row_data.append('N/A')
+            row_data.append(round(sum(vm_means) / len(vm_means) * 100, 1) if vm_means else 'N/A')
+            row_data.append(round(sum(va_means) / len(va_means) * 100, 1) if va_means else 'N/A')
+            all_m = vm_means + va_means
+            row_data.append(round(sum(all_m) / len(all_m) * 100, 1) if all_m else 'N/A')
+            data_rows.append(row_data)
+        writer.add_table(f'GoogleRobot - {model_name}', tbl_headers, data_rows)
 
-def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
+        # Detailed runs table
+        if show_all_runs:
+            detail_headers = ['Checkpoint', 'Eval'] + task_display_names + ['VM-Avg', 'VA-Avg', 'Overall']
+            detail_rows = []
+            for checkpoint in sorted_checkpoints:
+                step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+                all_file_indices = set()
+                for task in all_tasks:
+                    td = results[checkpoint].get(task)
+                    if td and td['count'] > 1:
+                        all_file_indices.update(td['file_rates'].keys())
+                for file_idx in sorted(all_file_indices):
+                    eval_name = 'eval.log' if file_idx == 0 else f'eval_{file_idx}.log'
+                    row_data = [f'steps_{step_num}', eval_name]
+                    vm_rates, va_rates = [], []
+                    for task in ordered_tasks:
+                        td = results[checkpoint].get(task)
+                        if td and file_idx in td['file_rates']:
+                            rate = td['file_rates'][file_idx]
+                            row_data.append(round(rate * 100, 1))
+                            (vm_rates if task in vm_tasks else va_rates).append(rate)
+                        else:
+                            row_data.append('N/A')
+                    row_data.append(round(sum(vm_rates) / len(vm_rates) * 100, 1) if vm_rates else 'N/A')
+                    row_data.append(round(sum(va_rates) / len(va_rates) * 100, 1) if va_rates else 'N/A')
+                    all_r = vm_rates + va_rates
+                    row_data.append(round(sum(all_r) / len(all_r) * 100, 1) if all_r else 'N/A')
+                    detail_rows.append(row_data)
+            if detail_rows:
+                writer.add_table(f'GoogleRobot Runs - {model_name}', detail_headers, detail_rows)
+
+
+def parse_robotwin_results(base_dir, model_name, show_all_runs=False, writer=None):
     """Parse Robotwin results (clean and randomized)"""
     model_dir = base_dir / model_name
     if not model_dir.exists():
@@ -1085,6 +1280,52 @@ def parse_robotwin_results(base_dir, model_name, show_all_runs=False):
 
             print("=" * total_rand_width)
 
+    if writer is not None:
+        # Summary table
+        tbl_headers = ['Checkpoint', 'Clean (%)', 'Randomized (%)', 'Average (%)']
+        data_rows = []
+        for checkpoint in sorted_checkpoints:
+            step_num = re.search(r'steps_(\d+)', checkpoint).group(1)
+            clean_tasks = results[checkpoint]['clean']
+            rand_tasks = results[checkpoint]['randomized']
+            row_data = [f'steps_{step_num}']
+            row_data.append(round(sum(clean_tasks.values()) / len(clean_tasks) * 100, 1) if clean_tasks else 'N/A')
+            row_data.append(round(sum(rand_tasks.values()) / len(rand_tasks) * 100, 1) if rand_tasks else 'N/A')
+            all_rates = list(clean_tasks.values()) + list(rand_tasks.values())
+            row_data.append(round(sum(all_rates) / len(all_rates) * 100, 1) if all_rates else 'N/A')
+            data_rows.append(row_data)
+        writer.add_table(f'RoboTwin Summary - {model_name}', tbl_headers, data_rows)
+
+        # Detailed per-task tables (if show_all_runs)
+        if show_all_runs:
+            step_nums = [re.search(r'steps_(\d+)', cp).group(1) for cp in sorted_checkpoints]
+            all_clean_set = sorted({t for cp in sorted_checkpoints for t in results[cp]['clean']})
+            all_rand_set = sorted({t for cp in sorted_checkpoints for t in results[cp]['randomized']})
+
+            if all_clean_set:
+                detail_headers = ['Task'] + [f's{s}' for s in step_nums]
+                detail_rows = [
+                    [task] + [
+                        round(results[cp]['clean'].get(task, None) * 100, 1)
+                        if results[cp]['clean'].get(task) is not None else 'N/A'
+                        for cp in sorted_checkpoints
+                    ]
+                    for task in all_clean_set
+                ]
+                writer.add_table(f'RoboTwin Clean - {model_name}', detail_headers, detail_rows)
+
+            if all_rand_set:
+                detail_headers = ['Task'] + [f's{s}' for s in step_nums]
+                detail_rows = [
+                    [task] + [
+                        round(results[cp]['randomized'].get(task, None) * 100, 1)
+                        if results[cp]['randomized'].get(task) is not None else 'N/A'
+                        for cp in sorted_checkpoints
+                    ]
+                    for task in all_rand_set
+                ]
+                writer.add_table(f'RoboTwin Rand - {model_name}', detail_headers, detail_rows)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1118,6 +1359,12 @@ Examples:
 
   # Parse multiple models
   python parse_results.py -L -m model1 model2 model3
+
+  # Export to CSV
+  python parse_results.py -R -m robotwin_all_50_qwen3OFT_all -o results.csv
+
+  # Export to Excel (requires openpyxl: pip install openpyxl)
+  python parse_results.py -R -m robotwin_all_50_qwen3OFT_all -a -o results.xlsx
         """
     )
 
@@ -1140,34 +1387,45 @@ Examples:
                         help='Log directory path (default: logs)')
     parser.add_argument('-a', '--show_all_runs', action='store_true',
                         help='Show detailed results for all runs (WidowX, Google Robot, and Robotwin)')
+    parser.add_argument('-o', '--output', type=str, default="score.csv",
+                        help='Export results to file. Extension determines format: .csv or .xlsx')
 
     args = parser.parse_args()
 
     # Determine base directory based on benchmark type
     if args.libero:
         base_dir = Path(__file__).parent.parent.parent / args.log_dir
-        parse_func = parse_libero_results
     elif args.widowx:
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'widowx'
-        parse_func = lambda bd, mn: parse_widowx_results(bd, mn, args.show_all_runs)
     elif args.calvin:
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'calvin'
-        parse_func = parse_calvin_results
     elif args.google_robot:
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'google_robot'
-        parse_func = lambda bd, mn: parse_google_robot_results(bd, mn, args.show_all_runs)
     elif args.robotwin:
         base_dir = Path(__file__).parent.parent.parent / args.log_dir / 'Robotwin'
-        parse_func = lambda bd, mn: parse_robotwin_results(bd, mn, args.show_all_runs)
     else:
-        print(f"Error: No benchmark specified")
+        print("Error: No benchmark specified")
         return
+
+    writer = ResultsWriter(args.output) if args.output else None
 
     # Parse and display results for each model
     for i, model_name in enumerate(args.model_name):
         if i > 0:
             print("\n\n")
-        parse_func(base_dir, model_name)
+        if args.libero:
+            parse_libero_results(base_dir, model_name, writer=writer)
+        elif args.widowx:
+            parse_widowx_results(base_dir, model_name, args.show_all_runs, writer=writer)
+        elif args.calvin:
+            parse_calvin_results(base_dir, model_name, writer=writer)
+        elif args.google_robot:
+            parse_google_robot_results(base_dir, model_name, args.show_all_runs, writer=writer)
+        elif args.robotwin:
+            parse_robotwin_results(base_dir, model_name, args.show_all_runs, writer=writer)
+
+    if writer is not None:
+        writer.save()
 
 
 if __name__ == "__main__":
