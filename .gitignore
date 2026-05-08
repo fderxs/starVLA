@@ -228,8 +228,10 @@ kill_all_eval.sh
 lizrun.sh
 remove_images_folders.sh
 *.md
-tmp/
+.tmp/
 .labtasker
+labtasker_db.json
 examples/tools/labtasker/ls_tasks.sh
-examples/tools/labtasker/multi_submit.sh
+examples/tools/labtasker/resubmit_MoE_missing.sh
+examples/tools/labtasker/resubmit_failed.sh
 *.csv

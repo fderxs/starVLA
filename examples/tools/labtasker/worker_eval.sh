@@ -23,8 +23,8 @@ fi
 echo -e "\033[36m[Worker] Starting labtasker worker on GPU $gpu_id\033[0m"
 
 # ---- Build the per-task script that labtasker will run for each task ----
-mkdir -p ./tmp
-LABTASKER_TASK_SCRIPT=$(mktemp ./tmp/labtasker_eval_XXXXXX.sh)
+mkdir -p ./.tmp
+LABTASKER_TASK_SCRIPT=$(mktemp ./.tmp/labtasker_eval_XXXXXX.sh)
 
 cat <<'LABTASKER_LOOP_EOF' > "$LABTASKER_TASK_SCRIPT"
 #!/bin/bash
