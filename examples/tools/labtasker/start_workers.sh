@@ -11,14 +11,14 @@
 #
 # To stop all workers:
 #   pkill -f worker_eval.sh
-#   # or: kill $(cat ./tmp/labtasker_worker_pids.txt)
+#   # or: kill $(cat ./.tmp/labtasker_worker_pids.txt)
 
 gpu_start_id=${1:-0}
 n=${2:-8}
 
 hostname=$(hostname -s)
 log_dir="logs/labtasker_worker/${hostname}"
-pid_dir="./tmp/${hostname}"
+pid_dir="./.tmp/${hostname}"
 
 mkdir -p "$log_dir"
 mkdir -p "$pid_dir"

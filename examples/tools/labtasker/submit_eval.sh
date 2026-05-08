@@ -69,6 +69,25 @@ else
     exit 1
 fi
 
+# --- Failed submission log (shared across all submit_eval.sh calls in a session) ---
+FAILED_SUBMIT_LOG="${FAILED_SUBMIT_LOG:-./.tmp/labtasker_failed_submits.sh}"
+
+# Append one failed `labtasker task submit` command (properly quoted) to the log.
+_record_failed_submit() {
+    mkdir -p "$(dirname "$FAILED_SUBMIT_LOG")"
+    if [ ! -f "$FAILED_SUBMIT_LOG" ]; then
+        echo "#!/bin/bash" > "$FAILED_SUBMIT_LOG"
+        echo "# Failed labtasker task submissions. Resubmit with:" >> "$FAILED_SUBMIT_LOG"
+        echo "#   bash examples/tools/labtasker/resubmit_failed.sh $FAILED_SUBMIT_LOG" >> "$FAILED_SUBMIT_LOG"
+    fi
+    # printf '%q' produces eval-safe quoting for every argument
+    printf 'labtasker task submit' >> "$FAILED_SUBMIT_LOG"
+    for arg in "$@"; do
+        printf ' %q' "$arg" >> "$FAILED_SUBMIT_LOG"
+    done
+    printf '\n' >> "$FAILED_SUBMIT_LOG"
+}
+
 # --- Submit N tasks ---
 for i in $(seq 1 $n); do
     cur_step=$((init_step + (i-1) * gap))
@@ -79,18 +98,42 @@ for i in $(seq 1 $n); do
 
     echo "Checkpoint found, submitting task $i/$n  [benchmark=$benchmark, step=$cur_step] ..."
 
-    labtasker task submit \
-        --name "eval_${benchmark}" \
-        --metadata "{'tags': ['${benchmark}', '${submit_date}'], 'step': ${cur_step}}" \
-        --priority "$priority" \
-        -- \
-        --ckpt="$ckpt" \
-        --benchmark="$benchmark" \
-        --test_num="$test_num" \
-        --start_run_id="$start_run_id" \
-        --suites="$suites" \
-        --task_suite_name="$task_suite_name" \
-        --robotwin_type="$robotwin_type"
+    max_retries=5
+    retry_delay=10
+    for attempt in $(seq 1 $max_retries); do
+        if labtasker task submit \
+            --name "eval_${benchmark}" \
+            --metadata "{'tags': ['${benchmark}', '${submit_date}'], 'step': ${cur_step}}" \
+            --priority "$priority" \
+            -- \
+            --ckpt="$ckpt" \
+            --benchmark="$benchmark" \
+            --test_num="$test_num" \
+            --start_run_id="$start_run_id" \
+            --suites="$suites" \
+            --task_suite_name="$task_suite_name" \
+            --robotwin_type="$robotwin_type"; then
+            break
+        fi
+        if [ $attempt -lt $max_retries ]; then
+            echo -e "\033[33m  Submit failed (attempt $attempt/$max_retries), retrying in ${retry_delay}s ...\033[0m"
+            sleep $retry_delay
+        else
+            echo -e "\033[31m  Submit failed after $max_retries attempts, recording to $FAILED_SUBMIT_LOG\033[0m"
+            _record_failed_submit \
+                --name "eval_${benchmark}" \
+                --metadata "{'tags': ['${benchmark}', '${submit_date}'], 'step': ${cur_step}}" \
+                --priority "$priority" \
+                -- \
+                --ckpt="$ckpt" \
+                --benchmark="$benchmark" \
+                --test_num="$test_num" \
+                --start_run_id="$start_run_id" \
+                --suites="$suites" \
+                --task_suite_name="$task_suite_name" \
+                --robotwin_type="$robotwin_type"
+        fi
+    done
 done
 
 echo -e "\033[32mAll $n tasks submitted for benchmark '$benchmark'.\033[0m"

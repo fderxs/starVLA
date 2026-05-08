@@ -19,10 +19,10 @@ if [ -z "$gpu_id" ]; then
     exit 0
 fi
 
-PID_FILE="./tmp/$(hostname -s)/labtasker_worker_gpu_${gpu_id}.pid"
+PID_FILE="./.tmp/$(hostname -s)/labtasker_worker_gpu_${gpu_id}.pid"
 # Fall back to legacy flat layout (workers started before hostname-based dirs were added)
 if [ ! -f "$PID_FILE" ]; then
-    PID_FILE="./tmp/labtasker_worker_gpu_${gpu_id}.pid"
+    PID_FILE="./.tmp/labtasker_worker_gpu_${gpu_id}.pid"
 fi
 
 if [ ! -f "$PID_FILE" ]; then
